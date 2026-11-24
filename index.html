@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agenda de demandas · Tanyno</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1c1a17; --ink-2:#3a3631; --muted:#8a8378; --line:#e4dccd;
+  --gold:#b8986a; --gold-2:#c9a84c; --cream:#faf7f2; --shade:#f3eee5; --card:#ffffff;
+  --alta:#b4472f; --alta-bg:#f6e3dd; --media:#9a7420; --media-bg:#f6edd6; --baixa:#6b645a; --baixa-bg:#ece8e1;
+  --done:#4f7a52; --done-bg:#e3eee2; --prog:#2f5f8a; --prog-bg:#e0eaf3; --wait:#9a7420; --wait-bg:#f6edd6;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cream);color:var(--ink);font-family:Montserrat,system-ui,sans-serif;font-size:14px;line-height:1.45}
+header{background:var(--ink);color:#fff;padding:32px 16px 0}
+.wrap{max-width:1080px;margin:0 auto}
+.brand{font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--gold)}
+h1{font-family:"Cormorant Garamond",serif;font-weight:600;font-size:40px;margin:6px 0 4px;letter-spacing:.01em}
+.sub{color:#bdb5a8;font-size:12px;margin:0 0 22px}
+nav{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{all:unset;cursor:pointer;padding:12px 16px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#bdb5a8;border-bottom:3px solid transparent;white-space:nowrap}
+nav button[aria-selected=true]{color:#fff;border-bottom-color:var(--gold)}
+nav button:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+main{padding:28px 16px 64px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.stat{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--gold);padding:14px 16px}
+.stat b{display:block;font-family:"Cormorant Garamond",serif;font-size:32px;line-height:1;font-weight:700}
+.stat span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.stat.warn{border-left-color:var(--alta)}
+h2{font-family:"Cormorant Garamond",serif;font-size:26px;font-weight:600;margin:0 0 4px}
+.lead{color:var(--muted);font-size:12px;margin:0 0 16px}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line)}
+thead th{background:var(--ink);color:#fff;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;text-align:left;padding:12px 14px;border-bottom:3px solid var(--gold)}
+tbody td{padding:12px 14px;border-bottom:1px dotted #cfc6b6;vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+td.main{font-weight:600;border-right:3px solid var(--gold)}
+td.shade{background:var(--shade)}
+td.note{color:var(--muted);font-size:12px}
+td.c{text-align:center}
+tr.done td{color:#9b958b;text-decoration:line-through}
+tr.done td.main{border-right-color:#cfc6b6}
+tr.late td.date{color:var(--alta);font-weight:700}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap;text-decoration:none}
+.p-Alta{background:var(--alta-bg);color:var(--alta)} .p-Média{background:var(--media-bg);color:var(--media)} .p-Baixa{background:var(--baixa-bg);color:var(--baixa)}
+.s-A_fazer{background:var(--baixa-bg);color:var(--baixa)} .s-Em_andamento{background:var(--prog-bg);color:var(--prog)} .s-Aguardando{background:var(--wait-bg);color:var(--wait)} .s-Entregue,.s-Feito{background:var(--done-bg);color:var(--done)}
+.tag{font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:.06em}
+.check{display:inline-block;width:16px;height:16px;border:1.5px solid var(--gold);border-radius:3px;vertical-align:middle}
+.check.on{background:var(--gold);box-shadow:inset 0 0 0 3px var(--card)}
+.group td{background:var(--shade);font-family:"Cormorant Garamond",serif;font-weight:700;font-size:17px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.me td.main{color:var(--ink)} .me .who{color:var(--gold);font-weight:700}
+footer{color:var(--muted);font-size:11px;text-align:center;padding:24px 16px}
+.empty{padding:24px;text-align:center;color:var(--muted);background:var(--card);border:1px solid var(--line)}
+@media (max-width:720px){
+  h1{font-size:32px}
+  .stats{grid-template-columns:repeat(2,1fr)}
+  table,thead,tbody,tr,td{display:block;width:100%}
+  thead{display:none}
+  table{border:0;background:none}
+  tbody tr{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--gold);margin-bottom:10px;padding:10px 12px}
+  tbody td{border:0;padding:3px 0}
+  td.main{border:0;font-size:15px}
+  td.c{text-align:left}
+  td.shade{background:none}
+  td[data-l]:not(.main)::before{content:attr(data-l) ": ";color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  td:empty{display:none}
+  .group{border:0 !important;background:none !important;padding:0 !important;margin:16px 0 6px}
+  .group td{background:none;padding:0;border:0}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="brand">Tanyno · Marketing e design</div>
+    <h1>Agenda de demandas</h1>
+    <p class="sub" id="upd">Carregando…</p>
+    <nav role="tablist" id="tabs"></nav>
+  </div>
+</header>
+<main class="wrap" id="view"></main>
+<footer>Rodrigo Alves · Tanyno</footer>
+<script>
+const TABS=[["demandas","Demandas"],["digital","Digital"],["site","Rotina do site"],["container","Chegada de container"],["onboarding","Onboarding"],["concluidos","Concluídos"]];
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pill=(cls,t)=>t?`<span class="pill ${cls}">${esc(t)}</span>`:"";
+const sk=t=>"s-"+String(t).replace(/ /g,"_");
+function today(){const d=new Date(new Date().toLocaleString("en-US",{timeZone:"America/Sao_Paulo"}));return d.toISOString().slice(0,10)}
+function fmt(v){if(!v)return"";const[d,t]=v.split("T");const[y,m,dd]=d.split("-");return `${dd}/${m}`+(t?` ${t.slice(0,5)}`:"")}
+let D;
+const R={
+ demandas(){
+  const t=today(); const open=D.demandas.filter(r=>!r[0]&&r[4]!=="Entregue");
+  const pr={Alta:0,"Média":1,Baixa:2,"":3};
+  const rows=[...D.demandas].sort((a,b)=>(a[0]-b[0])||((a[3]||"9")>(b[3]||"9")?1:(a[3]||"9")<(b[3]||"9")?-1:0)||(pr[a[2]||""]-pr[b[2]||""]));
+  const late=open.filter(r=>r[3]&&r[3].slice(0,10)<t).length, hoje=open.filter(r=>r[3]&&r[3].slice(0,10)===t).length;
+  return `<div class="stats">
+   <div class="stat"><b>${open.length}</b><span>Em aberto</span></div>
+   <div class="stat ${late?"warn":""}"><b>${late}</b><span>Atrasadas</span></div>
+   <div class="stat"><b>${hoje}</b><span>Para hoje</span></div>
+   <div class="stat"><b>${D.concluidos.length}</b><span>Concluídas</span></div></div>
+   <h2>Demandas</h2><p class="lead">Ordenadas por prazo. As riscadas já foram feitas e vão para Concluídos no fim do dia.</p>
+   <table><thead><tr><th>Feito</th><th>Demanda</th><th>Prioridade</th><th>Prazo</th><th>Status</th><th>Observações</th></tr></thead><tbody>
+   ${rows.map(r=>{const done=r[0]||r[4]==="Entregue";const lt=!done&&r[3]&&r[3].slice(0,10)<t;
+     return `<tr class="${done?"done":""} ${lt?"late":""}"><td class="c" data-l="Feito"><span class="check ${done?"on":""}"></span></td><td class="main" data-l="Demanda">${esc(r[1])}</td><td class="shade" data-l="Prioridade">${pill("p-"+r[2],r[2])}</td><td class="date" data-l="Prazo">${fmt(r[3])}${lt?" · atrasada":""}</td><td class="shade" data-l="Status">${pill(sk(done?"Feito":r[4]),done?"Feito":r[4])}</td><td class="note" data-l="Obs.">${esc(r[6])}</td></tr>`}).join("")}
+   </tbody></table>`},
+ digital(){return `<h2>Digital</h2><p class="lead">Tarefas recorrentes de RD Station, Meta Ads e canais digitais.</p>
+   <table><thead><tr><th>Feito</th><th>Tarefa</th><th>Frequência</th><th>Quando</th><th>Observações</th></tr></thead><tbody>
+   ${D.digital.map(r=>`<tr class="${r[0]?"done":""}"><td class="c" data-l="Feito"><span class="check ${r[0]?"on":""}"></span></td><td class="main" data-l="Tarefa">${esc(r[1])}</td><td class="shade" data-l="Frequência"><span class="tag">${esc(r[2])}</span></td><td data-l="Quando">${esc(r[3])}</td><td class="note" data-l="Obs.">${esc(r[4])}</td></tr>`).join("")}</tbody></table>`},
+ site(){let g="";return `<h2>Rotina mensal do site</h2><p class="lead">Até dia 20 a Talita decide · entre dia 20 e dia 1 o Rodrigo produz · dia 1 o Rodrigo publica.</p>
+   <table><thead><tr><th>Feito</th><th>Atividade</th><th>Quando</th><th>Quem</th></tr></thead><tbody>
+   ${D.site.map(r=>{let h="";if(r[1]!==g){g=r[1];h=`<tr class="group"><td colspan="4">${esc(g)}</td></tr>`}
+     return h+`<tr class="${r[0]?"done":""}"><td class="c" data-l="Feito"><span class="check ${r[0]?"on":""}"></span></td><td class="main" data-l="Atividade">${esc(r[4])}</td><td class="shade" data-l="Quando">${esc(r[2])}</td><td data-l="Quem">${esc(r[3])}</td></tr>`}).join("")}</tbody></table>`},
+ container(){let g="";return `<h2>Chegada de container</h2><p class="lead">Fichas técnicas, fotos e site. As etapas do Rodrigo estão em dourado.</p>
+   <table><thead><tr><th>Nº</th><th>Atividade</th><th>Responsável</th></tr></thead><tbody>
+   ${D.container.map(r=>{let h="";if(r[1]!==g){g=r[1];h=`<tr class="group"><td colspan="3">${esc(g)}</td></tr>`}
+     return h+`<tr class="${r[3]==="Rodrigo"?"me":""}"><td class="c" data-l="Nº">${r[0]}</td><td class="main" data-l="Atividade">${esc(r[2])}</td><td class="shade" data-l="Responsável"><span class="${r[3]==="Rodrigo"?"who":""}">${esc(r[3])}</span></td></tr>`}).join("")}</tbody></table>`},
+ onboarding(){return `<h2>Onboarding e endomarketing</h2><p class="lead">Materiais para quem entra na Tanyno e datas especiais da equipe.</p>
+   <table><thead><tr><th>Material</th><th>Tipo</th><th>Quando fazer</th></tr></thead><tbody>
+   ${D.onboarding.map(r=>`<tr><td class="main" data-l="Material">${esc(r[0])}</td><td class="shade" data-l="Tipo"><span class="tag">${esc(r[1])}</span></td><td data-l="Quando">${esc(r[2])}</td></tr>`).join("")}</tbody></table>`},
+ concluidos(){return `<h2>Concluídos</h2><p class="lead">Tudo o que já foi entregue.</p>`+(D.concluidos.length?`
+   <table><thead><tr><th>Concluído em</th><th>Demanda</th><th>Prioridade</th><th>Prazo</th></tr></thead><tbody>
+   ${[...D.concluidos].reverse().map(r=>`<tr><td data-l="Concluído em">${fmt(r[0])}</td><td class="main" data-l="Demanda">${esc(r[1])}</td><td class="shade" data-l="Prioridade">${pill("p-"+r[2],r[2])}</td><td data-l="Prazo">${fmt(r[3])}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">Nada concluído ainda.</div>`)}
+};
+function show(id){document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected",b.dataset.id===id));document.getElementById("view").innerHTML=R[id]();try{history.replaceState(null,"","#"+id)}catch(e){}}
+document.getElementById("tabs").innerHTML=TABS.map(([id,l])=>`<button role="tab" data-id="${id}">${l}</button>`).join("");
+document.getElementById("tabs").addEventListener("click",e=>{const b=e.target.closest("button");if(b)show(b.dataset.id)});
+fetch("data.json",{cache:"no-store"}).then(r=>r.json()).then(d=>{D=d;
+  const [dt,tm]=d.atualizado.split("T");document.getElementById("upd").textContent=`Atualizado em ${fmt(dt)}/${dt.slice(0,4)} às ${tm}`;
+  const h=location.hash.slice(1);show(R[h]?h:"demandas")}).catch(()=>{document.getElementById("view").innerHTML='<div class="empty">Não foi possível carregar os dados.</div>'});
+</script>
+</body>
+</html>
