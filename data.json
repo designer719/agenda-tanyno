@@ -1,39 +1,12 @@
 {
- "atualizado": "2026-11-24T17:19",
+ "atualizado": "2026-11-24T17:39",
  "demandas": [
-  [
-   true,
-   "Fotos de endomarketing das meninas do comercial",
-   "Alta",
-   "2026-11-24T14:00",
-   "A fazer",
-   "",
-   ""
-  ],
-  [
-   true,
-   "Assinatura de e-mail comercial",
-   "Média",
-   "2026-11-25",
-   "A fazer",
-   "",
-   ""
-  ],
   [
    false,
    "Glass · Carrossel Guia de taças (posta 26/11)",
    "Média",
    "2026-11-25",
    "A fazer",
-   "",
-   ""
-  ],
-  [
-   true,
-   "Save the date da festa da Tanyno",
-   "Alta",
-   "2026-11-24",
-   "Em andamento",
    "",
    ""
   ],
@@ -45,15 +18,6 @@
    "Em andamento",
    "",
    "Postar às 17h. Se não der, posta amanhã (25/11)"
-  ],
-  [
-   true,
-   "Glass · Reels lava-louças (posta 24/11)",
-   "Alta",
-   "2026-11-24",
-   "Em andamento",
-   "",
-   "Falta edição e aprovação da Talita"
   ],
   [
    false,
@@ -72,15 +36,6 @@
    "A fazer",
    "",
    ""
-  ],
-  [
-   true,
-   "Atualizar as fotos das Box Tanyno CPF na planilha",
-   "Alta",
-   "2026-11-25",
-   "A fazer",
-   "",
-   "Colocar na planilha das Box as fotos que você tirou"
   ],
   [
    false,
@@ -126,6 +81,15 @@
    "A fazer",
    "",
    ""
+  ],
+  [
+   false,
+   "Fazer Tag Tanyno foto de perfil",
+   "Média",
+   "2026-11-27",
+   "A fazer",
+   "",
+   ""
   ]
  ],
  "concluidos": [
@@ -136,6 +100,38 @@
    "2026-11-24",
    "",
    ""
+  ],
+  [
+   "2026-11-24",
+   "Fotos de endomarketing das meninas do comercial",
+   "Alta",
+   "2026-11-24T14:00",
+   "",
+   ""
+  ],
+  [
+   "2026-11-24",
+   "Assinatura de e-mail comercial",
+   "Média",
+   "2026-11-25",
+   "",
+   ""
+  ],
+  [
+   "2026-11-24",
+   "Glass · Reels lava-louças (posta 24/11)",
+   "Alta",
+   "2026-11-24",
+   "",
+   "Falta edição e aprovação da Talita"
+  ],
+  [
+   "2026-11-24",
+   "Atualizar as fotos das Box Tanyno CPF na planilha",
+   "Alta",
+   "2026-11-25",
+   "",
+   "Colocar na planilha das Box as fotos que você tirou"
   ]
  ],
  "digital": [
