@@ -1,5 +1,5 @@
 {
- "atualizado": "2026-11-24T10:40",
+ "atualizado": "2026-11-24T11:09",
  "demandas": [
   [
    false,
@@ -142,14 +142,14 @@
    "Solicitar verba para anúncios",
    "Mensal",
    "Até dia 20, junto com as escolhas do site",
-   ""
+   "Data sugerida: ajuste se for outra"
   ],
   [
    false,
    "Subir campanhas de Meta Ads",
    "Mensal",
    "Dia 1, junto com o lançamento do site",
-   ""
+   "Data sugerida: ajuste se for outra"
   ],
   [
    false,
@@ -184,11 +184,11 @@
    "Ver qual post e qual disparo tiveram mais resposta",
    "Semanal",
    "Sexta",
-   "Entra no resumo da semana"
+   "Entra no resumo da semana para a Talita"
   ],
   [
    false,
-   "Relatório mensal do digital",
+   "Relatório mensal do digital para a Talita",
    "Mensal",
    "Do dia 1 ao dia 5",
    "Alcance, cliques, vendas dos disparos e dos anúncios"
