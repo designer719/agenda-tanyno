@@ -1,5 +1,5 @@
 {
- "atualizado": "2026-11-24T16:03",
+ "atualizado": "2026-11-24T17:19",
  "demandas": [
   [
    true,
@@ -47,7 +47,7 @@
    "Postar às 17h. Se não der, posta amanhã (25/11)"
   ],
   [
-   false,
+   true,
    "Glass · Reels lava-louças (posta 24/11)",
    "Alta",
    "2026-11-24",
@@ -74,7 +74,7 @@
    ""
   ],
   [
-   false,
+   true,
    "Atualizar as fotos das Box Tanyno CPF na planilha",
    "Alta",
    "2026-11-25",
