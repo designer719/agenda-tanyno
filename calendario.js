@@ -12,6 +12,12 @@
   const TIPOS = { "Data comemorativa": "🎉", "Lançamento": "🍷", "Evento Tanyno": "⭐", "Reunião": "👥", "Post extra": "➕", "Outro": "📌" };
   const CONTAS_EV = { Ambas: "Ambas as contas", Oficial: "Tanyno Oficial", Glass: "Tanyno Glass", Interno: "Interno" };
   const CONTA_NOME = { Oficial: "Tanyno Oficial", Glass: "Tanyno Glass" };
+  // listas iguais às do SQL (tabela solicitacoes)
+  const SOL_TIPOS = ["Card feed", "Stories", "Reels", "Carrossel", "Catálogo", "Site", "Material comercial", "Vídeo", "Outro"];
+  const SOL_MARCAS = ["Tanyno", "Tanyno Glass", "Mililitros", "Interno"];
+  const SOL_URG = ["Alta", "Média", "Baixa"];
+  const SOL_CAMPOS = [["objetivo", "Objetivo e público"], ["briefing", "Briefing"], ["texto_aprovado", "Texto aprovado"],
+    ["formatos", "Formatos e tamanhos"], ["produtos", "Vinhos e produtos"], ["links", "Links de referência e arquivos"], ["observacoes", "Observações"]];
 
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const slug = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "_");
@@ -31,7 +37,7 @@
 
   /* ---------- dados compartilhados (Supabase, ou memória no modo demonstração) ---------- */
   const Store = {
-    mode: "off", erro: "", user: null, aprov: [], eventos: [], client: null,
+    mode: "off", erro: "", user: null, aprov: [], eventos: [], sols: [], client: null,
 
     async init() {
       const q = new URLSearchParams(location.search);
@@ -55,7 +61,9 @@
         });
         const { data } = await this.client.auth.getSession();
         await this.setSession(data && data.session);
-        this.client.auth.onAuthStateChange((_ev, s) => { setTimeout(() => this.setSession(s).then(notify), 0); });
+        this.client.auth.onAuthStateChange((_ev, s) => {
+          setTimeout(() => this.setSession(s).then(() => this.refresh()).catch(e => console.warn(e)).then(notify), 0);
+        });
         await this.refresh();
         this.mode = "supabase"; this.erro = "";
       } catch (e) {
@@ -84,6 +92,21 @@
       if (e.error) throw e.error;
       this.aprov = a.data || [];
       this.eventos = e.data || [];
+      this.sols = [];
+      if (this.user && this.user.permitido) { // briefing só para quem tem acesso
+        const s = await this.client.from("solicitacoes").select("*").order("criado_em", { ascending: false });
+        if (!s.error) this.sols = s.data || [];
+      }
+    },
+
+    async addSolicitacao(campos) {
+      if (this.mode === "demo") {
+        this.sols.unshift(Object.assign({ id: "s" + Date.now(), criado_por: this.user.nome, criado_em: new Date().toISOString() }, campos));
+        return;
+      }
+      const { error } = await this.client.from("solicitacoes").insert(campos);
+      if (error) throw error;
+      await this.refresh();
     },
 
     decisao(id) { const a = this.aprov.find(x => x.post_id === id); return a ? a.decisao : null; },
@@ -131,6 +154,7 @@
     },
 
     async signOut() {
+      this.sols = [];
       if (this.mode === "demo") { this.user = null; return; }
       await this.client.auth.signOut();
       this.user = null;
@@ -319,6 +343,52 @@
     </form>`;
   }
 
+  const opts = (lista, sel) => lista.map(x => `<option${x === sel ? " selected" : ""}>${esc(x)}</option>`).join("");
+  function htmlDemanda() {
+    const area = (n, rot, dica, req) => `<label class="fl">${rot}${dica ? ` <small>${dica}</small>` : ""}<textarea name="${n}" rows="3"${req ? ' required minlength="10"' : ""} maxlength="${n === "briefing" || n === "texto_aprovado" ? 8000 : 3000}"></textarea></label>`;
+    return `<form class="ev-form" data-dem-form>
+      <div class="dlg-h"><h3 class="dlg-t" id="dlg-titulo">Nova demanda</h3>${fechar}</div>
+      <p class="muted small">Campos com * são obrigatórios. Quanto mais detalhe, menos ida e volta.</p>
+      <label class="fl">Título *<input name="titulo" required minlength="3" maxlength="140" placeholder="Ex.: Stories do lançamento Bruno Clair"></label>
+      <div class="row2">
+        <label class="fl">Tipo de peça *<select name="tipo" required><option value="">Escolha</option>${opts(SOL_TIPOS)}</select></label>
+        <label class="fl">Marca *<select name="marca" required><option value="">Escolha</option>${opts(SOL_MARCAS)}</select></label>
+      </div>
+      <div class="row2">
+        <label class="fl">Prazo desejado *<input type="date" name="prazo" required min="${hojeSP()}"></label>
+        <label class="fl">Urgência<select name="urgencia">${opts(SOL_URG, "Média")}</select></label>
+      </div>
+      ${area("objetivo", "Objetivo e público", "Para que serve e para quem")}
+      ${area("briefing", "Briefing *", "O que precisa ser feito, com todos os detalhes", true)}
+      ${area("texto_aprovado", "Texto aprovado", "Entra palavra por palavra")}
+      <label class="fl">Formatos e tamanhos<input name="formatos" maxlength="1000" placeholder="Ex.: feed 1080x1350 e stories 1080x1920"></label>
+      ${area("produtos", "Vinhos e produtos", "Rótulos, safras, códigos")}
+      ${area("links", "Links de referência e arquivos", "Drive, site, referências; um por linha")}
+      ${area("observacoes", "Observações")}
+      <div class="row"><button type="submit" class="btn-pri">Enviar demanda</button><button type="button" class="btn-sec" data-dlg-close>Cancelar</button></div>
+      <p class="form-msg" role="status"></p>
+    </form>`;
+  }
+  const htmlDemandaOk = e => `<div class="dlg-h"><h3 class="dlg-t" id="dlg-titulo">Demanda enviada</h3>${fechar}</div>
+      <p class="ev-desc">${esc(e.titulo)}</p>
+      <p class="muted">O Rodrigo recebe o aviso por e-mail e a demanda entra na agenda na próxima atualização automática (a cada 2 horas, de segunda a sexta). Ela já aparece em Demandas, em "Enviadas pelo site".</p>
+      <div class="row"><button type="button" class="btn-pri" data-dlg-close>Fechar</button></div>`;
+  // só http(s) vira link; o resto é texto escapado
+  const comLinks = t => String(t || "").split(/(https?:\/\/[^\s<>"']+)/).map((x, i) => i % 2
+    ? `<a href="${esc(x)}" target="_blank" rel="noopener noreferrer">${esc(x)}</a>` : esc(x)).join("");
+  function htmlSol(s) {
+    const prazo = String(s.prazo || "").slice(0, 10);
+    return `<div class="dlg-h"><div class="dlg-meta"><span class="pc-fmt">${esc(s.tipo)}</span><span class="dlg-data">${esc(s.marca)}</span></div>${fechar}</div>
+      <h3 class="dlg-t" id="dlg-titulo">${esc(s.titulo)}</h3>
+      <p class="muted small">Pedido por ${esc(s.criado_por || "")}${s.criado_em ? " em " + quando(s.criado_em) : ""}</p>
+      <dl class="dlg-dl">
+        ${prazo ? `<div class="dl-i"><dt>Prazo desejado</dt><dd>${cap(extenso(prazo))}</dd></div>` : ""}
+        ${campo("Urgência", s.urgencia)}
+        ${SOL_CAMPOS.map(([k, rot]) => s[k] ? `<div class="dl-i"><dt>${rot}</dt><dd class="pre">${k === "links" ? comLinks(s[k]) : esc(s[k])}</dd></div>` : "").join("")}
+      </dl>
+      <div class="row"><button type="button" class="btn-sec" data-dlg-close>Fechar</button></div>`;
+  }
+
   function abre(tipo, id, extra) {
     if (!Cal.dlg) {
       Cal.dlg = document.createElement("dialog");
@@ -334,7 +404,7 @@
     desenhaDlg();
     if (!Cal.dlg.open) Cal.dlg.showModal();
     const alvo = Cal.dlg.querySelector("input,textarea") || Cal.dlg.querySelector(".dlg-x");
-    if (alvo && tipo !== "post" && tipo !== "evento") alvo.focus();
+    if (alvo && tipo !== "post" && tipo !== "evento" && tipo !== "sol") alvo.focus();
   }
 
   function desenhaDlg() {
@@ -344,6 +414,9 @@
     else if (a.tipo === "evento") { const e = Store.eventos.find(x => String(x.id) === String(a.id)); if (!e) return Cal.dlg.close(); h = htmlEvento(e); }
     else if (a.tipo === "form") h = htmlForm(a.extra || {});
     else if (a.tipo === "login") h = htmlLogin();
+    else if (a.tipo === "demanda") h = htmlDemanda();
+    else if (a.tipo === "demanda-ok") h = htmlDemandaOk(a.extra || {});
+    else if (a.tipo === "sol") { const s = Store.sols.find(x => String(x.id) === String(a.id)); if (!s) return Cal.dlg.close(); h = htmlSol(s); }
     Cal.dlg.innerHTML = `<div class="dlg-in">${h}</div>`;
   }
 
@@ -402,6 +475,16 @@
         notify();
         if (salvo) abre("evento", salvo); else Cal.dlg.close();
       } catch (e) { msg.textContent = erroMsg(e); btn.disabled = false; }
+      return;
+    }
+    if (f.hasAttribute("data-dem-form")) {
+      const d = {};
+      ["titulo", "tipo", "marca", "prazo", "urgencia", "objetivo", "briefing", "texto_aprovado", "formatos", "produtos", "links", "observacoes"]
+        .forEach(k => { const v = f.elements[k].value.trim(); d[k] = v || null; });
+      if (!d.titulo || !d.tipo || !d.marca || !d.prazo || !d.briefing) { msg.textContent = "Preencha os campos com *."; return; }
+      btn.disabled = true; msg.textContent = "Enviando…";
+      try { await Store.addSolicitacao(d); abre("demanda-ok", null, { titulo: d.titulo }); notify(); }
+      catch (e) { msg.textContent = erroMsg(e).replace("salvar", "enviar"); btn.disabled = false; }
       return;
     }
     if (f.hasAttribute("data-login-form")) {
@@ -489,7 +572,15 @@
     },
     unmount() { Cal.ativo = false; },
     pendentes,
-    get store() { return Store; }
+    get store() { return Store; },
+    solicitacoes: () => Store.sols,
+    novaDemanda() {
+      if (Store.mode === "off") return;
+      if (!Store.user) { abre("login"); return; }
+      if (!Store.pode()) { alert("Este e-mail não tem permissão para incluir demandas."); return; }
+      abre("demanda");
+    },
+    verSolicitacao(id) { abre("sol", id); }
   };
   window.Calendario = api;
 })();
