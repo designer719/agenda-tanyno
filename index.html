@@ -348,19 +348,24 @@ const card=(head,body)=>`<div class="card"><table><thead><tr>${head.map(h=>`<th>
 function today(){const d=new Date(new Date().toLocaleString("en-US",{timeZone:"America/Sao_Paulo"}));return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
 function fmt(v){if(!v)return"";const[d,t]=v.split("T");const[y,m,dd]=d.split("-");return `${dd}/${m}`+(t?` ${t.slice(0,5)}`:"")}
 let D=null;
+// aceita pelo site que a rotina ainda não pôs na planilha: já aparece como demanda normal (mesmo texto que a rotina grava)
+const CRONO_SOL={"Tanyno":"Tanyno Oficial","Tanyno Glass":"Tanyno Glass"},POST_SOL=["Card feed","Reels","Carrossel","Stories"];
+function obsSol(s){let o=`Pedido pelo site: ${s.tipo}, ${s.marca}. Briefing completo no site.`;
+  if(s.data_publicacao&&CRONO_SOL[s.marca]&&POST_SOL.includes(s.tipo)){const d=String(s.data_publicacao).slice(0,10);o+=` Publicação em ${d.slice(8,10)}/${d.slice(5,7)}/${d.slice(0,4)} (${CRONO_SOL[s.marca]}).`}return o}
+function demandasTodas(){return D.demandas.concat(Calendario.solicitacoes().filter(s=>s.situacao==="aceita"&&!s.na_planilha&&!D.demandas.some(r=>r[1]===s.titulo&&r[5]===s.criado_por))
+  .map(s=>[false,s.titulo,s.urgencia||"Média",String(s.prazo).slice(0,10),"A fazer",s.criado_por||"",obsSol(s)]))}
 const R={
  demandas(){
-  const t=today(); const open=D.demandas.filter(r=>!r[0]&&r[4]!=="Entregue");
+  const t=today(),todas=demandasTodas(); const open=todas.filter(r=>!r[0]&&r[4]!=="Entregue");
   const pr={Alta:0,"Média":1,Baixa:2,"":3};
-  const rows=[...D.demandas].sort((a,b)=>(a[0]-b[0])||((a[3]||"9")>(b[3]||"9")?1:(a[3]||"9")<(b[3]||"9")?-1:0)||(pr[a[2]||""]-pr[b[2]||""]));
+  const rows=[...todas].sort((a,b)=>(a[0]-b[0])||((a[3]||"9")>(b[3]||"9")?1:(a[3]||"9")<(b[3]||"9")?-1:0)||(pr[a[2]||""]-pr[b[2]||""]));
   const late=open.filter(r=>r[3]&&r[3].slice(0,10)<t).length, hoje=open.filter(r=>r[3]&&r[3].slice(0,10)===t).length;
   // demanda pedida pelo site = mesma Demanda e mesmo Pedido por na planilha
   const sols=Calendario.solicitacoes(), solDe=r=>sols.find(s=>s.titulo===r[1]&&s.criado_por===r[5]);
-  // ainda fora da planilha e não recusadas (recusada some da lista)
-  const pend=sols.filter(s=>s.situacao!=="recusada"&&!D.demandas.some(r=>r[1]===s.titulo&&r[5]===s.criado_por)&&!D.concluidos.some(r=>r[1]===s.titulo));
+  // só as novas: aceita vira demanda normal na tabela, recusada some
+  const pend=sols.filter(s=>(s.situacao||"pendente")==="pendente");
   const gestor=Calendario.podeAceitar();
-  const acao=s=>s.situacao==="aceita"?`<span class="sol-st ok">Aceita · entra na agenda na próxima atualização</span>`
-    :gestor?`<div class="sol-a"><button type="button" class="btn-ac" data-aceitar="${esc(s.id)}">Aceitar</button><button type="button" class="btn-sec" data-recusar="${esc(s.id)}">Recusar</button></div>`
+  const acao=s=>gestor?`<div class="sol-a"><button type="button" class="btn-ac" data-aceitar="${esc(s.id)}">Aceitar</button><button type="button" class="btn-sec" data-recusar="${esc(s.id)}">Recusar</button></div>`
     :`<span class="sol-st">Aguardando o Rodrigo aceitar</span>`;
   const bt=Calendario.store.mode!=="off"?`<div class="tb-c"><button type="button" class="btn-pri" data-nova-demanda>+ Nova demanda</button></div>`:"";
   return barra("Demandas",bt)+`<div class="stats">
@@ -368,7 +373,7 @@ const R={
    <div class="stat ${late?"warn":""}"><b>${late}</b><span>Atrasadas</span></div>
    <div class="stat"><b>${hoje}</b><span>Para hoje</span></div>
    <div class="stat"><b>${D.concluidos.length}</b><span>Concluídas</span></div></div>
-   ${pend.length?`<section class="sols" aria-labelledby="sols-t"><h2 id="sols-t">Enviadas pelo site</h2><p class="lead">Depois de aceitas, entram nas demandas (e no cronograma, se forem publicação) na próxima atualização automática.</p><div class="sol-l">${pend.map(s=>`<div class="sol"><button type="button" class="sol-b" data-sol="${esc(s.id)}"><b>${esc(s.titulo)}</b><span>${esc(s.tipo)} · ${esc(s.marca)} · prazo ${fmt(String(s.prazo).slice(0,10))}</span><span>Pedido por ${esc(s.criado_por)}</span></button>${acao(s)}</div>`).join("")}</div></section>`:""}
+   ${pend.length?`<section class="sols" aria-labelledby="sols-t"><h2 id="sols-t">Enviadas pelo site</h2><p class="lead">Novas, aguardando aceite. A aceita vai na hora para as demandas abaixo; se for publicação, entra no cronograma na próxima atualização automática.</p><div class="sol-l">${pend.map(s=>`<div class="sol"><button type="button" class="sol-b" data-sol="${esc(s.id)}"><b>${esc(s.titulo)}</b><span>${esc(s.tipo)} · ${esc(s.marca)} · prazo ${fmt(String(s.prazo).slice(0,10))}</span><span>Pedido por ${esc(s.criado_por)}</span></button>${acao(s)}</div>`).join("")}</div></section>`:""}
    <p class="lead">Ordenadas por prazo. As riscadas já foram feitas e vão para Concluídos no fim do dia.</p>`+
    card(["Feito","Demanda","Prioridade","Prazo","Status","Observações"],rows.map(r=>{
      const done=r[0]||r[4]==="Entregue"; const d=r[3]?r[3].slice(0,10):""; const lt=!done&&d&&d<t; const hj=!done&&d===t;
@@ -420,7 +425,7 @@ async function abreAgenda(){const st=Calendario.store;
   catch(e){console.error(e);porta("fora")}
   finally{abrindo=false}}
 function fechaAgenda(){D=null;CUR=null;Calendario.unmount();document.getElementById("view").innerHTML="";document.getElementById("tabs").innerHTML=""}
-function count(id){if(id==="calendario"){const n=Calendario.pendentes();return n==null?"":n}if(id==="demandas")return D.demandas.filter(r=>!r[0]&&r[4]!=="Entregue").length;if(id==="digital"||id==="site")return D[id].filter(r=>!r[0]).length;return D[id].length}
+function count(id){if(id==="calendario"){const n=Calendario.pendentes();return n==null?"":n}if(id==="demandas")return demandasTodas().filter(r=>!r[0]&&r[4]!=="Entregue").length;if(id==="digital"||id==="site")return D[id].filter(r=>!r[0]).length;return D[id].length}
 function renderTabs(){document.getElementById("tabs").innerHTML=TABS.map(([id,l])=>{const n=count(id),cal=id==="calendario";
   return `<button type="button" class="ni" data-id="${id}"${id===CUR?' aria-current="page"':""}><span class="ni-ic" aria-hidden="true">${ICO[id]||""}</span><span class="ni-t">${l}</span>${n===""?"":`<span class="n"${cal?` title="Posts aguardando aprovação" aria-label="${n} aguardando aprovação"`:""}>${n}</span>`}</button>`}).join("")}
 function show(id){CUR=id;document.querySelectorAll(".ni").forEach(b=>b.dataset.id===id?b.setAttribute("aria-current","page"):b.removeAttribute("aria-current"));const v=document.getElementById("view");
