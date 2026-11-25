@@ -464,10 +464,9 @@
         <label class="fl">Marca *<select name="marca" required><option value="">Escolha</option>${opts(SOL_MARCAS)}</select></label>
       </div>
       <div class="row2">
-        <label class="fl" data-prazo-l>Prazo desejado *<input type="date" name="prazo" required min="${hojeSP()}"></label>
+        <label class="fl"><span data-prazo-rot>Prazo desejado *</span><input type="date" name="prazo" required min="${hojeSP()}"></label>
         <label class="fl">Urgência<select name="urgencia">${opts(SOL_URG, "Média")}</select></label>
       </div>
-      <div data-pub hidden><label class="fl">Data de publicação * <small data-pub-onde></small><input type="date" name="data_publicacao" min="${hojeSP()}" disabled></label></div>
       ${area("objetivo", "Objetivo e público", "Para que serve e para quem")}
       ${area("briefing", "Briefing *", "O que precisa ser feito, com todos os detalhes", true)}
       ${area("texto_aprovado", "Texto aprovado", "Entra palavra por palavra")}
@@ -479,14 +478,10 @@
       <p class="form-msg" role="status"></p>
     </form>`;
   }
-  // publicação no Instagram (tipo de rede social + Tanyno ou Glass): pede o dia do post, que vira o prazo
+  // publicação no Instagram (tipo de rede social + Tanyno ou Glass): o mesmo campo vira "Data de publicação" (a data digitada fica)
+  const ehPostForm = f => !!(CRONO[f.elements.marca.value] && FORMATO[f.elements.tipo.value]);
   function ajustaFormDemanda(f) {
-    const tipo = f.elements.tipo.value, marca = f.elements.marca.value, post = !!(CRONO[marca] && FORMATO[tipo]);
-    const dp = f.elements.data_publicacao, pz = f.elements.prazo;
-    f.querySelector("[data-pub]").hidden = !post; dp.disabled = !post; dp.required = post;
-    f.querySelector("[data-prazo-l]").hidden = post; pz.disabled = post; pz.required = !post;
-    f.querySelector("[data-pub-onde]").textContent = post
-      ? `Vai para o calendário da ${CRONO[marca]} como ${FORMATO[tipo]} nesse dia, depois de aceita. O prazo da demanda é esse mesmo dia.` : "";
+    f.querySelector("[data-prazo-rot]").textContent = ehPostForm(f) ? "Data de publicação *" : "Prazo desejado *";
   }
   const htmlDemandaOk = e => `<div class="dlg-h"><h3 class="dlg-t" id="dlg-titulo">Demanda enviada</h3>${fechar}</div>
       <p class="ev-desc">${esc(e.titulo)}</p>
@@ -759,9 +754,7 @@
       const d = {};
       ["titulo", "tipo", "marca", "prazo", "urgencia", "objetivo", "briefing", "texto_aprovado", "formatos", "produtos", "links", "observacoes"]
         .forEach(k => { const v = f.elements[k].value.trim(); d[k] = v || null; });
-      const post = !f.elements.data_publicacao.disabled;
-      d.data_publicacao = post ? f.elements.data_publicacao.value || null : null;
-      if (post) d.prazo = d.data_publicacao;
+      d.data_publicacao = ehPostForm(f) ? d.prazo : null;
       if (!d.titulo || !d.tipo || !d.marca || !d.prazo || !d.briefing) { msg.textContent = "Preencha os campos com *."; return; }
       btn.disabled = true; msg.textContent = "Enviando…";
       try { await Store.addSolicitacao(d); abre("demanda-ok", null, { titulo: d.titulo }); notify(); }
