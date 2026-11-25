@@ -191,7 +191,16 @@
   const mesMax = () => addMes(hojeSP().slice(0, 7), 12); // o calendário vai só até 12 meses à frente
   const clampMes = ym => ym < MES_MIN ? MES_MIN : ym > mesMax() ? mesMax() : ym;
   const filtraConta = c => Cal.conta === "Todas" || c === Cal.conta;
-  const postsMes = () => Cal.posts.filter(p => p.data.slice(0, 7) === Cal.mes && filtraConta(p.conta));
+  // publicação aceita pelo site que a rotina ainda não pôs no cronograma: aparece já, como provisória, no dia escolhido
+  const provisorios = () => Store.sols
+    .filter(s => s.situacao === "aceita" && !s.na_planilha && s.data_publicacao && ehPost(s))
+    .map(s => ({ id: "sol-" + s.id, sol: s.id, provisorio: true, conta: s.marca === "Tanyno" ? "Oficial" : "Glass",
+      data: String(s.data_publicacao).slice(0, 10), formato: FORMATO[s.tipo], tema: s.titulo, ideia: s.briefing,
+      rotulo: s.produtos || "", gancho: "", cta: "", status: "Produzindo" }))
+    .filter(v => !Cal.posts.some(p => p.conta === v.conta && p.data === v.data && p.tema === v.tema));
+  const todosPosts = () => Cal.posts.concat(provisorios());
+  const postsMes = () => todosPosts().filter(p => p.data.slice(0, 7) === Cal.mes && filtraConta(p.conta))
+    .sort((a, b) => a.data < b.data ? -1 : a.data > b.data ? 1 : 0);
   const eventosMes = () => Store.eventos.filter(e => String(e.data).slice(0, 7) === Cal.mes &&
     (Cal.conta === "Todas" || e.conta === Cal.conta || e.conta === "Ambas" || e.conta === "Interno"));
 
@@ -217,7 +226,7 @@
     return `<button type="button" class="pcard c-${p.conta}" data-cal-post="${esc(p.id)}">
       <span class="pc-top"><span class="pc-conta c-${esc(p.conta)}">${esc(p.conta)}</span>${p.formato ? ` · ${esc(p.formato)}` : ""}</span>
       <span class="pc-tema">${esc(p.tema)}</span>
-      <span class="pc-bot">${stPill(p.status)}${selo(Store.decisao(p.id))}</span></button>`;
+      <span class="pc-bot">${stPill(p.status)}${p.provisorio ? `<span class="selo s-wait">Entra no cronograma</span>` : selo(Store.decisao(p.id))}</span></button>`;
   }
   // aniversários (planilha do Drive): "MM-DD" vira a data deste mês; 29/02 cai em 28/02 fora do ano bissexto
   const bissexto = y => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -318,7 +327,10 @@
     const dec = Store.decisao(p.id), hist = Store.historico(p.id), pode = Store.pode();
     const ant = i > 0 ? lista[i - 1].id : "", prox = i >= 0 && i < lista.length - 1 ? lista[i + 1].id : "";
     let apr;
-    if (Store.mode === "off") {
+    if (p.provisorio) {
+      apr = `<p class="muted">Aceita pelo site. Entra no cronograma na próxima atualização automática, e a aprovação fica liberada depois disso.</p>
+        <p class="apr-login"><button type="button" class="link" data-ver-sol="${esc(p.sol)}">Ver o briefing completo</button></p>`;
+    } else if (Store.mode === "off") {
       apr = `<p class="muted">Aprovações indisponíveis no momento.</p>`;
     } else {
       apr = `<div class="apr-btns">
@@ -337,7 +349,7 @@
       <h3 class="dlg-t" id="dlg-titulo">${esc(p.tema)}</h3>
       <div class="dlg-tags"><span class="pc-fmt">${esc(p.formato)}</span>${stPill(p.status)}</div>
       <dl class="dlg-dl">${campo("Ideia do post", p.ideia)}${campo("Gancho (1ª frase)", p.gancho)}${campo(p.conta === "Glass" ? "Vinho que aparece" : "Rótulo ou vinho", p.rotulo)}${campo("CTA", p.cta)}</dl>
-      <section class="apr" aria-label="Aprovação"><h4>Aprovação ${selo(dec)}</h4>${apr}</section>
+      <section class="apr" aria-label="Aprovação"><h4>Aprovação ${p.provisorio ? "" : selo(dec)}</h4>${apr}</section>
       <div class="dlg-nav">
         <button type="button" class="btn-sec" data-nav="${ant}" ${ant ? "" : "disabled"}>‹ Anterior</button>
         <span class="muted">${i + 1} de ${lista.length}</span>
@@ -482,7 +494,7 @@
   function desenhaDlg() {
     const a = Cal.aberto; if (!a || !Cal.dlg) return;
     let h = "";
-    if (a.tipo === "post") { const p = Cal.posts.find(x => x.id === a.id); if (!p) return Cal.dlg.close(); h = htmlPost(p); }
+    if (a.tipo === "post") { const p = todosPosts().find(x => x.id === a.id); if (!p) return Cal.dlg.close(); h = htmlPost(p); }
     else if (a.tipo === "evento") { const e = Store.eventos.find(x => String(x.id) === String(a.id)); if (!e) return Cal.dlg.close(); h = htmlEvento(e); }
     else if (a.tipo === "form") h = htmlForm(a.extra || {});
     else if (a.tipo === "login") h = htmlLogin();
@@ -508,6 +520,7 @@
     if (b.hasAttribute("data-dlg-close")) { Cal.dlg.close(); return; }
     if (b.hasAttribute("data-cal-login")) { abre("login"); return; }
     if (b.dataset.nav) { abre("post", b.dataset.nav); return; }
+    if (b.dataset.verSol) { abre("sol", b.dataset.verSol); return; }
     if (b.dataset.apr === "aprovado") {
       b.disabled = true;
       try { await Store.addAprov(Cal.aberto.id, "aprovado", ""); notify(); }
