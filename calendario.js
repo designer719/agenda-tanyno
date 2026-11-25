@@ -99,6 +99,18 @@
       }
     },
 
+    async carregaAgenda() { // o antigo data.json; no modo demonstração vem do arquivo local de teste
+      if (this.mode === "demo") {
+        const r = await fetch("data.json", { cache: "no-store" });
+        if (!r.ok) throw new Error("data.json " + r.status);
+        return r.json();
+      }
+      const { data, error } = await this.client.from("agenda_dados").select("dados").eq("id", 1).maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("agenda vazia");
+      return data.dados;
+    },
+
     async addSolicitacao(campos) {
       if (this.mode === "demo") {
         this.sols.unshift(Object.assign({ id: "s" + Date.now(), criado_por: this.user.nome, criado_em: new Date().toISOString() }, campos));
@@ -580,7 +592,10 @@
       if (!Store.pode()) { alert("Este e-mail não tem permissão para incluir demandas."); return; }
       abre("demanda");
     },
-    verSolicitacao(id) { abre("sol", id); }
+    verSolicitacao(id) { abre("sol", id); },
+    carregaAgenda: () => Store.carregaAgenda(),
+    async entrar(email) { await Store.signIn(email); },
+    async sair() { await Store.signOut(); notify(); }
   };
   window.Calendario = api;
 })();
