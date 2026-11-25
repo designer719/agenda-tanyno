@@ -84,6 +84,8 @@
 
     async refresh() {
       if (this.mode === "demo") return;
+      // sem acesso o banco recusa a leitura (só e-mails permitidos leem): nada a buscar
+      if (!(this.user && this.user.permitido)) { this.aprov = []; this.eventos = []; this.sols = []; return; }
       const [a, e] = await Promise.all([
         this.client.from("aprovacoes").select("*").order("criado_em", { ascending: false }),
         this.client.from("eventos").select("*").order("data", { ascending: true })
