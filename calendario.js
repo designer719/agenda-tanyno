@@ -171,7 +171,7 @@
   const evChip = e => `<button type="button" class="evchip" data-cal-ev="${esc(e.id)}"><span aria-hidden="true">${TIPOS[e.tipo] || "📌"}</span><span class="evchip-t">${esc(e.titulo)}</span></button>`;
   function cardPost(p) {
     return `<button type="button" class="pcard c-${p.conta}" data-cal-post="${esc(p.id)}">
-      <span class="pc-top">${ctag(p.conta)}<span class="pc-fmt">${esc(p.formato)}</span></span>
+      <span class="pc-top"><span class="pc-conta c-${esc(p.conta)}">${esc(p.conta)}</span>${p.formato ? ` · ${esc(p.formato)}` : ""}</span>
       <span class="pc-tema">${esc(p.tema)}</span>
       <span class="pc-bot">${stPill(p.status)}${selo(Store.decisao(p.id))}</span></button>`;
   }
@@ -201,7 +201,7 @@
     for (let d = 1; d <= nd; d++) {
       const ds = `${Cal.mes}-${String(d).padStart(2, "0")}`, x = porDia[ds] || { p: [], e: [] };
       cels.push(`<div class="cd${ds === hoje ? " hoje" : ""}${ds < hoje ? " passado" : ""}" aria-label="${extenso(ds)}">
-        <div class="cd-top"><span class="cd-n">${d}</span><span class="cd-c">${nPosts(x.p.length)}</span>${addBtn(ds)}</div>
+        <div class="cd-top">${addBtn(ds)}<span class="cd-n">${d}</span></div>
         ${x.e.map(evChip).join("")}${x.p.map(cardPost).join("")}</div>`);
     }
     while (cels.length % 7) cels.push(`<div class="cd fora" aria-hidden="true"></div>`);
@@ -216,11 +216,9 @@
 
     const v = n => on ? n : "–";
     return `<div class="cal">
-      <div class="cal-head">
-        <div><h2>${cap(mesNome(Cal.mes))}</h2><p class="lead">Tanyno Oficial posta terça, quarta e quinta. Tanyno Glass posta terça e quinta.</p></div>
-        ${Store.pode() ? `<button type="button" class="btn-pri" data-cal-add="${Cal.mes === hoje.slice(0, 7) ? hoje : Cal.mes + "-01"}">+ Novo evento</button>` : ""}
-      </div>
-      <div class="cal-bar">
+      <div class="topbar">
+        <h1 class="tb-t">Calendário de publicações</h1>
+        <div class="tb-c">
         <div class="seg" role="group" aria-label="Filtrar por conta">
           ${["Todas", "Oficial", "Glass"].map(c => `<button type="button" class="seg-b sb-${c}" data-cal-conta="${c}" aria-pressed="${Cal.conta === c}">${c === "Todas" ? "Todas" : CONTA_NOME[c]}</button>`).join("")}
         </div>
@@ -228,7 +226,9 @@
           <button type="button" class="mn-b" data-cal-mes="-1" aria-label="Mês anterior" ${Cal.mes <= MES_MIN ? "disabled" : ""}>‹</button>
           <select class="mn-sel" data-cal-sel aria-label="Escolher o mês">${meses.map(x => `<option value="${x}"${x === Cal.mes ? " selected" : ""}>${cap(mesNome(x))}</option>`).join("")}</select>
           <button type="button" class="mn-b" data-cal-mes="1" aria-label="Próximo mês" ${Cal.mes >= mesMax() ? "disabled" : ""}>›</button>
-          <button type="button" class="mn-hoje" data-cal-hoje>Hoje</button>
+        </div>
+        <button type="button" class="mn-hoje" data-cal-hoje>Hoje</button>
+        ${Store.pode() ? `<button type="button" class="btn-pri" data-cal-add="${Cal.mes === hoje.slice(0, 7) ? hoje : Cal.mes + "-01"}">+ Novo evento</button>` : ""}
         </div>
       </div>
       <div class="stats cal-stats">
@@ -238,8 +238,8 @@
         <div class="stat"><b>${v(ps.length - ap - aj)}</b><span>Aguardando</span></div>
       </div>
       ${aviso ? `<p class="cal-aviso" role="status">${aviso}</p>` : ""}
-      <div class="cal-grid" role="grid" aria-label="${cap(mesNome(Cal.mes))}">
-        ${DIAS_CURTOS.map((d, i) => `<div class="cg-h" role="columnheader" aria-label="${DIAS[i]}">${d}</div>`).join("")}
+      <div class="cal-dias" aria-hidden="true">${DIAS_CURTOS.map(d => `<div class="cg-h">${d}</div>`).join("")}</div>
+      <div class="cal-grid" aria-label="${cap(mesNome(Cal.mes))}">
         ${cels.join("")}
       </div>
       <div class="cal-lista">${lista}</div>
@@ -443,7 +443,9 @@
     const el = document.getElementById("auth"); if (!el) return;
     if (Store.mode === "off") { el.innerHTML = ""; return; }
     if (Store.user) {
-      el.innerHTML = `<span class="auth-who" title="${esc(Store.user.email)}">${esc(Store.user.nome || Store.user.email)}</span><button type="button" class="auth-b" data-auth-out>Sair</button>`;
+      const nome = Store.user.nome || Store.user.email || "";
+      const ini = nome.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join("");
+      el.innerHTML = `<span class="av" aria-hidden="true">${esc(ini)}</span><span class="auth-who" title="${esc(Store.user.email)}">${esc(nome)}</span><button type="button" class="auth-b" data-auth-out>Sair</button>`;
     } else {
       el.innerHTML = `<button type="button" class="auth-b" data-auth-in>Entrar</button>`;
     }
