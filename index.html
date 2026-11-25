@@ -371,17 +371,18 @@ function porta(tipo){const p=document.getElementById("porta"),st=Calendario.stor
   document.body.classList.toggle("trancado",!!tipo);p.hidden=!tipo;if(!tipo){p.innerHTML="";return}
   const cab=`<img class="logo" src="${logo}" alt="Tanyno"><p class="area">Marketing e design</p><h1>Agenda de demandas</h1>`;
   if(tipo==="entrar")p.innerHTML=`<div class="porta-c">${cab}
-    <p>Entre com o seu e-mail para ver a agenda. Você recebe um link de acesso; abra o link neste mesmo aparelho e navegador.</p>
-    ${st.authErro?`<p class="erro" role="alert">O link de acesso não funcionou (${esc(st.authErro)}). Peça um link novo: ele vale por pouco tempo e só uma vez.</p>`:""}
-    <form id="porta-f"><label class="fl">E-mail<input type="email" name="email" required autocomplete="email"></label>
-    <button type="submit" class="btn-pri">Enviar link de acesso</button><p class="form-msg" role="status"></p></form></div>`;
+    <p>Entre com o e-mail e a senha que você recebeu do Rodrigo.</p>
+    <form id="porta-f"><label class="fl">E-mail<input type="email" name="email" required autocomplete="username"></label>
+    <label class="fl">Senha<input type="password" name="senha" required autocomplete="current-password"></label>
+    <button type="submit" class="btn-pri">Entrar</button><p class="form-msg" role="status"></p>
+    <p class="small muted">Esqueceu a senha? Fale com o Rodrigo.</p></form></div>`;
   else if(tipo==="sem-acesso")p.innerHTML=`<div class="porta-c">${cab}<p>Você entrou como <b>${esc(st.user.email)}</b>, mas este e-mail não tem acesso à agenda. Fale com o Rodrigo.</p>
     <button type="button" class="btn-sec" data-porta-sair>Sair</button></div>`;
   else p.innerHTML=`<div class="porta-c">${cab}<p>A agenda está indisponível no momento. Tente de novo em alguns minutos.</p></div>`}
-document.getElementById("porta").addEventListener("submit",async e=>{e.preventDefault();const f=e.target,msg=f.querySelector(".form-msg"),b=f.querySelector("button"),em=f.email.value.trim();
-  b.disabled=true;msg.textContent="Enviando…";
-  try{await Calendario.entrar(em);msg.textContent=`Pronto. Confira a caixa de entrada de ${em} e clique no link.`}
-  catch(err){msg.textContent="Não foi possível enviar o link: "+(err.message||err);b.disabled=false}});
+document.getElementById("porta").addEventListener("submit",async e=>{e.preventDefault();const f=e.target,msg=f.querySelector(".form-msg"),b=f.querySelector("button");
+  b.disabled=true;msg.textContent="Entrando…";
+  try{await Calendario.entrar(f.email.value.trim(),f.senha.value)}
+  catch(err){msg.textContent=err.message||String(err);f.senha.value="";b.disabled=false;f.senha.focus()}});
 document.getElementById("porta").addEventListener("click",e=>{if(e.target.closest("[data-porta-sair]"))Calendario.sair()});
 let abrindo=false;
 async function abreAgenda(){const st=Calendario.store;

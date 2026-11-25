@@ -159,12 +159,10 @@
       await this.refresh();
     },
 
-    async signIn(email) {
+    async signIn(email, senha) {
       if (this.mode === "demo") { this.user = { email, nome: "Demonstração", permitido: true }; setTimeout(notify, 0); return; }
-      const { error } = await this.client.auth.signInWithOtp({
-        email, options: { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: true }
-      });
-      if (error) throw error;
+      const { error } = await this.client.auth.signInWithPassword({ email, password: senha });
+      if (error) throw new Error(/invalid login|credentials/i.test(error.message) ? "E-mail ou senha incorretos." : error.message);
     },
 
     async signOut() {
@@ -350,9 +348,9 @@
   function htmlLogin() {
     return `<form class="login-form" data-login-form>
       <div class="dlg-h"><h3 class="dlg-t" id="dlg-titulo">Entrar</h3>${fechar}</div>
-      <p class="muted">Você recebe um link de acesso no e-mail. Abra o link neste mesmo aparelho e navegador.</p>
-      <label class="fl">E-mail<input type="email" name="email" required autocomplete="email"></label>
-      <div class="row"><button type="submit" class="btn-pri">Enviar link de acesso</button></div>
+      <label class="fl">E-mail<input type="email" name="email" required autocomplete="username"></label>
+      <label class="fl">Senha<input type="password" name="senha" required autocomplete="current-password"></label>
+      <div class="row"><button type="submit" class="btn-pri">Entrar</button></div>
       <p class="form-msg" role="status"></p>
     </form>`;
   }
@@ -502,9 +500,9 @@
       return;
     }
     if (f.hasAttribute("data-login-form")) {
-      btn.disabled = true; msg.textContent = "Enviando…";
-      try { await Store.signIn(f.email.value.trim()); msg.textContent = `Pronto. Confira a caixa de entrada de ${f.email.value.trim()} e clique no link.`; }
-      catch (e) { msg.textContent = "Não foi possível enviar o link: " + (e.message || e); btn.disabled = false; }
+      btn.disabled = true; msg.textContent = "Entrando…";
+      try { await Store.signIn(f.email.value.trim(), f.senha.value); Cal.dlg.close(); }
+      catch (e) { msg.textContent = e.message || String(e); btn.disabled = false; }
     }
   }
 
@@ -596,7 +594,7 @@
     },
     verSolicitacao(id) { abre("sol", id); },
     carregaAgenda: () => Store.carregaAgenda(),
-    async entrar(email) { await Store.signIn(email); },
+    async entrar(email, senha) { await Store.signIn(email, senha); },
     async sair() { await Store.signOut(); notify(); }
   };
   window.Calendario = api;

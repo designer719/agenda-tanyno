@@ -1,7 +1,7 @@
 # Agenda de demandas · Tanyno
 
 Página da agenda do Rodrigo (marketing e design da Tanyno), publicada com o GitHub Pages.
-Só abre para quem entra com um e-mail autorizado (link de acesso por e-mail, via Supabase).
+Só abre para quem entra com e-mail e senha criados pelo Rodrigo (Supabase).
 
 - `index.html`: a página (menu lateral, seções e tela de entrada)
 - `calendario.js`: calendário de publicações, aprovações, eventos, demandas pelo site e login
