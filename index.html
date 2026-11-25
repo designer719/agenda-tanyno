@@ -159,6 +159,11 @@ tbody tr.group:first-child td{padding-top:16px}
 .evchip{display:flex;align-items:center;gap:6px;width:100%;border:0;border-radius:6px;background:#ECECEE;padding:4px 8px;font-size:12px;color:var(--ink);text-align:left}
 .evchip:hover{background:#E2E2E4}
 .evchip-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.anchip{font:inherit;cursor:pointer;display:flex;align-items:center;gap:6px;width:100%;border:0;border-radius:6px;background:#FDEBD7;padding:4px 8px;font-size:12px;color:#7A4510;text-align:left}
+.anchip:hover{background:#FADDBE}
+.anchip{align-items:flex-start;line-height:1.3}
+.anchip .evchip-t{white-space:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.antag{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#FDEBD7;color:#7A4510}
 .pcard{display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:100%;text-align:left;border:1px solid var(--line);border-left:3px solid var(--oficial);border-radius:6px;background:var(--card);padding:7px 8px;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.05);transition:box-shadow .15s}
 .pcard.c-Glass{border-left-color:var(--glass)}
 .pcard:hover{box-shadow:0 2px 10px rgba(0,0,0,.1)}
@@ -190,7 +195,7 @@ tbody tr.group:first-child td{padding-top:16px}
 .ld-hoje{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#fff;background:var(--wine);padding:2px 8px;border-radius:999px}
 .ld .cd-add{margin:0 0 0 auto;opacity:1;width:32px;height:32px}
 .ld .pc-tema{font-size:14px;-webkit-line-clamp:3}
-.ld .evchip{font-size:13px;padding:7px 10px}
+.ld .evchip,.ld .anchip{font-size:13px;padding:7px 10px}
 .ld .pcard{padding:10px 12px}
 dialog.cal-dlg{border:0;padding:0;border-radius:20px;width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow:auto;background:var(--card);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.25)}
 dialog.cal-dlg::backdrop{background:rgba(20,20,20,.45)}
@@ -391,7 +396,7 @@ async function abreAgenda(){const st=Calendario.store;
   if(!st.user.permitido)return porta("sem-acesso");
   if(D)return porta(null);
   if(abrindo)return;abrindo=true;
-  try{const d=await Calendario.carregaAgenda();D=d;Calendario.init(d.instagram||[]);
+  try{const d=await Calendario.carregaAgenda();D=d;Calendario.init(d.instagram||[],d.aniversarios||[]);
     const [dt,tm]=d.atualizado.split("T");document.getElementById("upd").textContent=`Atualizado ${fmt(dt)} às ${tm}`;
     porta(null);let h=HASH0;if(!R[h]&&h!=="calendario")h="calendario";CUR=h;renderTabs();show(h)}
   catch(e){console.error(e);porta("fora")}

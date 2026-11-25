@@ -174,13 +174,9 @@
   };
 
   /* ---------- estado do calendário ---------- */
-  const Cal = { posts: [], mes: null, conta: "Todas", root: null, dlg: null, aberto: null, ultimoFoco: null };
+  const Cal = { posts: [], anivs: [], mes: null, conta: "Todas", root: null, dlg: null, aberto: null, ultimoFoco: null };
 
-  const mesMax = () => {
-    let max = "2027-12";
-    Cal.posts.forEach(p => { const m = p.data.slice(0, 7); if (m > max) max = m; });
-    return max;
-  };
+  const mesMax = () => addMes(hojeSP().slice(0, 7), 12); // o calendário vai só até 12 meses à frente
   const clampMes = ym => ym < MES_MIN ? MES_MIN : ym > mesMax() ? mesMax() : ym;
   const filtraConta = c => Cal.conta === "Todas" || c === Cal.conta;
   const postsMes = () => Cal.posts.filter(p => p.data.slice(0, 7) === Cal.mes && filtraConta(p.conta));
@@ -211,6 +207,14 @@
       <span class="pc-tema">${esc(p.tema)}</span>
       <span class="pc-bot">${stPill(p.status)}${selo(Store.decisao(p.id))}</span></button>`;
   }
+  // aniversários (planilha do Drive): "MM-DD" vira a data deste mês; 29/02 cai em 28/02 fora do ano bissexto
+  const bissexto = y => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const anivsMes = () => {
+    const [y, m] = Cal.mes.split("-");
+    return Cal.anivs.map((a, i) => ({ a, i })).filter(x => x.a.dia.slice(0, 2) === m)
+      .map(x => Object.assign(x, { ds: `${y}-${x.a.dia === "02-29" && !bissexto(+y) ? "02-28" : x.a.dia}` }));
+  };
+  const anChip = x => `<button type="button" class="anchip" data-cal-aniv="${x.i}" data-dia="${x.ds}"><span aria-hidden="true">🎂</span><span class="evchip-t">Aniversário ${esc(x.a.nome)}</span></button>`;
   const nPosts = n => n ? `${n} ${n > 1 ? "posts" : "post"}` : "";
 
   function htmlCalendario() {
@@ -219,8 +223,9 @@
     const aj = ps.filter(p => Store.decisao(p.id) === "ajustar").length;
     const meses = []; for (let m = MES_MIN; m <= mesMax(); m = addMes(m, 1)) meses.push(m);
     const porDia = {};
-    ps.forEach(p => (porDia[p.data] = porDia[p.data] || { p: [], e: [] }).p.push(p));
-    evs.forEach(e => { const d = String(e.data).slice(0, 10); (porDia[d] = porDia[d] || { p: [], e: [] }).e.push(e); });
+    ps.forEach(p => (porDia[p.data] = porDia[p.data] || { p: [], e: [], a: [] }).p.push(p));
+    evs.forEach(e => { const d = String(e.data).slice(0, 10); (porDia[d] = porDia[d] || { p: [], e: [], a: [] }).e.push(e); });
+    anivsMes().forEach(x => (porDia[x.ds] = porDia[x.ds] || { p: [], e: [], a: [] }).a.push(x));
 
     let aviso = "";
     if (Store.mode === "demo") aviso = "Modo demonstração: aprovações e eventos ficam só neste navegador e somem ao recarregar a página.";
@@ -235,10 +240,10 @@
     const cels = [];
     for (let i = 0; i < ini; i++) cels.push(`<div class="cd fora" aria-hidden="true"></div>`);
     for (let d = 1; d <= nd; d++) {
-      const ds = `${Cal.mes}-${String(d).padStart(2, "0")}`, x = porDia[ds] || { p: [], e: [] };
+      const ds = `${Cal.mes}-${String(d).padStart(2, "0")}`, x = porDia[ds] || { p: [], e: [], a: [] };
       cels.push(`<div class="cd${ds === hoje ? " hoje" : ""}${ds < hoje ? " passado" : ""}" aria-label="${extenso(ds)}">
         <div class="cd-top">${addBtn(ds)}<span class="cd-n">${d}</span></div>
-        ${x.e.map(evChip).join("")}${x.p.map(cardPost).join("")}</div>`);
+        ${x.e.map(evChip).join("")}${x.a.map(anChip).join("")}${x.p.map(cardPost).join("")}</div>`);
     }
     while (cels.length % 7) cels.push(`<div class="cd fora" aria-hidden="true"></div>`);
 
@@ -247,7 +252,7 @@
     const lista = dias.length ? dias.map(d => {
       const x = porDia[d];
       return `<section class="ld${d === hoje ? " hoje" : ""}"><div class="ld-h"><span class="ld-d">${cap(extenso(d))}</span>${d === hoje ? `<span class="ld-hoje">hoje</span>` : ""}<span class="cd-c">${nPosts(x.p.length)}</span>${addBtn(d)}</div>
-        ${x.e.map(evChip).join("")}${x.p.map(cardPost).join("")}</section>`;
+        ${x.e.map(evChip).join("")}${x.a.map(anChip).join("")}${x.p.map(cardPost).join("")}</section>`;
     }).join("") : `<div class="empty">Nenhum post ${Cal.conta === "Todas" ? "" : "desta conta "}neste mês.</div>`;
 
     const v = n => on ? n : "–";
@@ -328,6 +333,12 @@
       ${pode ? `<div class="row"><button type="button" class="btn-pri" data-ev-edit="${esc(e.id)}">Editar</button><button type="button" class="btn-del" data-ev-del="${esc(e.id)}">Apagar</button></div>`
         : !Store.user ? `<p class="apr-login"><button type="button" class="link" data-cal-login>Entre para editar</button></p>` : ""}`;
   }
+
+  const htmlAniv = (x, ds) => `<div class="dlg-h"><div class="dlg-meta"><span class="ev-ic" aria-hidden="true">🎂</span><span class="dlg-data">${cap(extenso(ds))}</span></div>${fechar}</div>
+      <h3 class="dlg-t" id="dlg-titulo">Aniversário ${esc(x.nome)}</h3>
+      <div class="dlg-tags"><span class="antag">Aniversário</span></div>
+      ${x.obs ? `<dl class="dlg-dl">${campo("Observação", x.obs)}</dl>` : ""}
+      <p class="muted small">Vem da planilha Aniversários, atualizada pela equipe.</p>`;
 
   function htmlForm(e) {
     const opt = (lista, sel) => Object.keys(lista).map(k => `<option value="${esc(k)}"${k === sel ? " selected" : ""}>${typeof lista[k] === "string" && lista === CONTAS_EV ? esc(lista[k]) : esc(k)}</option>`).join("");
@@ -426,6 +437,7 @@
     else if (a.tipo === "evento") { const e = Store.eventos.find(x => String(x.id) === String(a.id)); if (!e) return Cal.dlg.close(); h = htmlEvento(e); }
     else if (a.tipo === "form") h = htmlForm(a.extra || {});
     else if (a.tipo === "login") h = htmlLogin();
+    else if (a.tipo === "aniv") { const x = Cal.anivs[+a.id]; if (!x) return Cal.dlg.close(); h = htmlAniv(x, a.extra); }
     else if (a.tipo === "demanda") h = htmlDemanda();
     else if (a.tipo === "demanda-ok") h = htmlDemandaOk(a.extra || {});
     else if (a.tipo === "sol") { const s = Store.sols.find(x => String(x.id) === String(a.id)); if (!s) return Cal.dlg.close(); h = htmlSol(s); }
@@ -514,6 +526,7 @@
     if (b.hasAttribute("data-cal-hoje")) { Cal.mes = clampMes(hojeSP().slice(0, 7)); render(); return; }
     if (b.dataset.calPost) { abre("post", b.dataset.calPost); return; }
     if (b.dataset.calEv) { abre("evento", b.dataset.calEv); return; }
+    if (b.dataset.calAniv) { abre("aniv", b.dataset.calAniv, b.dataset.dia); return; }
     if (b.dataset.calAdd) {
       if (!Store.user) { abre("login"); return; }
       if (!Store.pode()) { alert("Este e-mail não tem permissão para criar eventos."); return; }
@@ -562,8 +575,9 @@
 
   const api = {
     onUpdate: null,
-    init(posts) {
+    init(posts, anivs) {
       Cal.posts = Array.isArray(posts) ? posts.filter(p => p && p.data && p.id) : [];
+      Cal.anivs = Array.isArray(anivs) ? anivs.filter(a => a && a.nome && /^\d\d-\d\d$/.test(a.dia)) : [];
       Cal.mes = clampMes(hojeSP().slice(0, 7));
     },
     start() {
