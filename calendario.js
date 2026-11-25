@@ -468,7 +468,6 @@
         <label class="fl">Urgência<select name="urgencia">${opts(SOL_URG, "Média")}</select></label>
       </div>
       <div data-pub hidden><label class="fl">Data de publicação * <small data-pub-onde></small><input type="date" name="data_publicacao" min="${hojeSP()}" disabled></label></div>
-      <label class="chk-l" data-cal-opt><input type="checkbox" name="no_calendario"> Mostrar no calendário quando for aceita, no dia do prazo</label>
       ${area("objetivo", "Objetivo e público", "Para que serve e para quem")}
       ${area("briefing", "Briefing *", "O que precisa ser feito, com todos os detalhes", true)}
       ${area("texto_aprovado", "Texto aprovado", "Entra palavra por palavra")}
@@ -486,7 +485,6 @@
     const dp = f.elements.data_publicacao, pz = f.elements.prazo;
     f.querySelector("[data-pub]").hidden = !post; dp.disabled = !post; dp.required = post;
     f.querySelector("[data-prazo-l]").hidden = post; pz.disabled = post; pz.required = !post;
-    f.querySelector("[data-cal-opt]").hidden = post;
     f.querySelector("[data-pub-onde]").textContent = post
       ? `Vai para o calendário da ${CRONO[marca]} como ${FORMATO[tipo]} nesse dia, depois de aceita. O prazo da demanda é esse mesmo dia.` : "";
   }
@@ -509,7 +507,7 @@
       <p class="ev-desc"><b>${esc(s.titulo)}</b><br><span class="muted">${esc(s.tipo)} · ${esc(s.marca)} · pedido por ${esc(s.criado_por || "")}</span></p>
       ${ehPost(s) ? `<label class="fl">Data de publicação<input type="date" name="data_pub" required min="${hoje}" value="${sug}"></label>
         <p class="muted small">Entra nas suas demandas e no cronograma ${esc(CRONO[s.marca])} como ${esc(FORMATO[s.tipo])}, na próxima atualização automática.</p>`
-        : `<p class="muted small">Entra nas suas demandas na próxima atualização automática.${s.no_calendario && prazo ? ` Vira um evento no calendário em ${dm(prazo)}, ligado a ela.` : ""}</p>`}
+        : `<p class="muted small">Entra nas suas demandas na próxima atualização automática.</p>`}
       <div class="row"><button type="submit" class="btn-pri">Aceitar</button><button type="button" class="btn-sec" data-dlg-close>Cancelar</button></div>
       <p class="form-msg" role="status"></p>
     </form>`;
@@ -600,7 +598,6 @@
       <dl class="dlg-dl">
         ${s.data_publicacao ? `<div class="dl-i"><dt>Data de publicação</dt><dd>${cap(extenso(String(s.data_publicacao).slice(0, 10)))}</dd></div>`
           : prazo ? `<div class="dl-i"><dt>Prazo desejado</dt><dd>${cap(extenso(prazo))}</dd></div>` : ""}
-        ${s.no_calendario ? campo("No calendário", "Sim, no dia do prazo") : ""}
         ${campo("Urgência", s.urgencia)}
         ${SOL_CAMPOS.map(([k, rot]) => s[k] ? `<div class="dl-i"><dt>${rot}</dt><dd class="pre">${k === "links" ? comLinks(s[k]) : esc(s[k])}</dd></div>` : "").join("")}
       </dl>
@@ -753,12 +750,6 @@
         await Store.decide(f.dataset.id, "aceita", dp);
         const s = Store.sols.find(x => String(x.id) === String(f.dataset.id));
         if (s && dp && ehPost(s)) await Store.addVinculo({ linha: 0, demanda: "sol:" + s.id, tipo: "post", conta: s.marca === "Tanyno" ? "Oficial" : "Glass", data: dp, tema: s.titulo });
-        else if (s && s.no_calendario && s.prazo) {     // pediu para aparecer no calendário: evento no dia do prazo, ligado à demanda
-          const data = String(s.prazo).slice(0, 10);
-          await Store.saveEvento({ data, titulo: s.titulo, tipo: "Outro", conta: "Interno", descricao: `Demanda pedida por ${s.criado_por || ""} pelo site.` });
-          const ev = Store.eventos.filter(e => e.titulo === s.titulo && String(e.data).slice(0, 10) === data).pop();
-          if (ev) await Store.addVinculo({ linha: 0, demanda: "sol:" + s.id, tipo: "evento", evento_id: ev.id });
-        }
         Cal.dlg.close(); notify();
       }
       catch (e) { msg.textContent = erroMsg(e); btn.disabled = false; }
@@ -771,7 +762,6 @@
       const post = !f.elements.data_publicacao.disabled;
       d.data_publicacao = post ? f.elements.data_publicacao.value || null : null;
       if (post) d.prazo = d.data_publicacao;
-      d.no_calendario = !post && f.elements.no_calendario.checked;
       if (!d.titulo || !d.tipo || !d.marca || !d.prazo || !d.briefing) { msg.textContent = "Preencha os campos com *."; return; }
       btn.disabled = true; msg.textContent = "Enviando…";
       try { await Store.addSolicitacao(d); abre("demanda-ok", null, { titulo: d.titulo }); notify(); }
