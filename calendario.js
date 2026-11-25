@@ -37,7 +37,7 @@
 
   /* ---------- dados compartilhados (Supabase, ou memória no modo demonstração) ---------- */
   const Store = {
-    mode: "off", erro: "", user: null, aprov: [], eventos: [], sols: [], edicoes: [], client: null,
+    mode: "off", erro: "", user: null, aprov: [], eventos: [], sols: [], edicoes: [], vinculos: [], client: null,
 
     async init() {
       const q = new URLSearchParams(location.search);
@@ -86,7 +86,7 @@
     async refresh() {
       if (this.mode === "demo") return;
       // sem acesso o banco recusa a leitura (só e-mails permitidos leem): nada a buscar
-      if (!(this.user && this.user.permitido)) { this.aprov = []; this.eventos = []; this.sols = []; this.edicoes = []; return; }
+      if (!(this.user && this.user.permitido)) { this.aprov = []; this.eventos = []; this.sols = []; this.edicoes = []; this.vinculos = []; return; }
       const [a, e] = await Promise.all([
         this.client.from("aprovacoes").select("*").order("criado_em", { ascending: false }),
         this.client.from("eventos").select("*").order("data", { ascending: true })
@@ -102,6 +102,8 @@
         // edições das demandas ainda não aplicadas na planilha (o site mostra por cima)
         const ed = await this.client.from("edicoes_demandas").select("*").eq("aplicada", false).order("criado_em", { ascending: true });
         this.edicoes = ed.error ? [] : ed.data || [];
+        const vi = await this.client.from("vinculos_demandas").select("*");
+        this.vinculos = vi.error ? [] : vi.data || [];
       }
     },
 
@@ -126,6 +128,24 @@
       const { error } = await this.client.rpc("decide_solicitacao", { sol: id, decisao, data_pub: dataPub || null });
       if (error) throw error;
       await this.refresh();
+    },
+
+    // demanda ligada a um post ou evento do calendário
+    async addVinculo(v) {
+      if (this.mode === "demo") { this.vinculos.push(Object.assign({ id: "v" + Date.now() }, v)); return; }
+      const { error } = await this.client.from("vinculos_demandas").insert(v);
+      if (error) throw error;
+      await this.refresh();
+    },
+    async delVinculo(id) {
+      if (this.mode === "demo") { this.vinculos = this.vinculos.filter(v => v.id !== id); return; }
+      const { error } = await this.client.from("vinculos_demandas").delete().eq("id", id);
+      if (error) throw error;
+    },
+    async updVinculo(id, campos) {
+      if (this.mode === "demo") { Object.assign(this.vinculos.find(v => v.id === id) || {}, campos); return; }
+      const { error } = await this.client.from("vinculos_demandas").update(campos).eq("id", id);
+      if (error) throw error;
     },
 
     async addEdicoes(lista) { // [{linha, demanda, campo, valor}]
@@ -214,7 +234,13 @@
       data: String(s.data_publicacao).slice(0, 10), formato: FORMATO[s.tipo], tema: edSol(s.id, "demanda") || s.titulo, ideia: s.briefing,
       rotulo: s.produtos || "", gancho: "", cta: "", status: "Produzindo" }))
     .filter(v => !Cal.posts.some(p => p.conta === v.conta && p.data === v.data && p.tema === v.tema));
-  const todosPosts = () => Cal.posts.concat(provisorios());
+  // post movido pelo site (prazo da demanda ligada mudou): aparece já no dia novo, até a rotina mover no cronograma
+  const chavePost = p => `post:${p.conta}|${p.data}|${p.id}|${p.tema}`;
+  const movidoPara = p => { const k = chavePost(p), l = Store.edicoes.filter(e => e.campo === "mover_post" && e.demanda === k); return l.length ? l[l.length - 1].valor : null; };
+  const todosPosts = () => Cal.posts.concat(provisorios()).map(p => {
+    const n = movidoPara(p);
+    return Object.assign({}, p, { base: { data: p.data, id: p.id } }, n ? { data: n } : {});
+  });
   const postsMes = () => todosPosts().filter(p => p.data.slice(0, 7) === Cal.mes && filtraConta(p.conta))
     .sort((a, b) => a.data < b.data ? -1 : a.data > b.data ? 1 : 0);
   const eventosMes = () => Store.eventos.filter(e => String(e.data).slice(0, 7) === Cal.mes &&
@@ -483,7 +509,7 @@
     const s = r.sol, prazo = String(r[3] || "").slice(0, 10), gestor = !!(Store.user && Store.user.gestor);
     return `<div class="dlg-h"><div class="dlg-meta">${r[0] ? `<span class="stp st-Publicado">Concluída</span>` : r[4] ? `<span class="pc-fmt">${esc(r[4])}</span>` : ""}${prazo ? `<span class="dlg-data">Prazo: ${cap(extenso(prazo))}</span>` : ""}</div>${fechar}</div>
       <h3 class="dlg-t" id="dlg-titulo">${esc(r[1])}</h3>
-      <dl class="dlg-dl">${campo("Prioridade", r[2])}${campo("Status", r[0] ? "Feito" : r[4])}${campo("Pedido por", r[5])}${r[6] ? `<div class="dl-i"><dt>Observações</dt><dd class="pre">${esc(r[6])}</dd></div>` : ""}</dl>
+      <dl class="dlg-dl">${campo("Prioridade", r[2])}${campo("Status", r[0] ? "Feito" : r[4])}${campo("Pedido por", r[5])}${campo("No calendário", textoVinculo(vinculoDe(r)))}${r[6] ? `<div class="dl-i"><dt>Observações</dt><dd class="pre">${esc(r[6])}</dd></div>` : ""}</dl>
       ${s ? `<section class="apr" aria-label="Briefing"><h4>Briefing enviado pelo site</h4><dl class="dlg-dl">
         ${campo("Tipo de peça", s.tipo)}${campo("Marca", s.marca)}${campo("Urgência", s.urgencia)}${s.data_publicacao ? campo("Data de publicação", dmyBR(String(s.data_publicacao).slice(0, 10))) : ""}
         ${SOL_CAMPOS.map(([k, rot]) => s[k] ? `<div class="dl-i"><dt>${rot}</dt><dd class="pre">${k === "links" ? comLinks(s[k]) : esc(s[k])}</dd></div>` : "").join("")}
@@ -509,12 +535,49 @@
         <label class="fl">Prazo<input type="date" name="prazo" value="${esc(String(r[3] || "").slice(0, 10))}"></label>
       </div>
       <label class="fl">Status<select name="status">${op(STATUS, r[4] || "A fazer")}</select></label>
+      <label class="fl">No calendário <small>Mudou o prazo, o post ou evento ligado vai para o mesmo dia</small><select name="vinculo">
+        <option value="">Nenhum</option>${(r._op = opcoesCalendario()).map((o, i) => { const v = vinculoDe(r);
+          const sel = v && (v.tipo === "evento" ? o.evento_id === v.evento_id : o.tipo === "post" && o.conta === v.conta && o.data === String(v.data).slice(0, 10) && o.tema === v.tema);
+          return `<option value="${i}"${sel ? " selected" : ""}>${esc(o.rot)}</option>`; }).join("")}</select></label>
       <label class="fl">Observações<textarea name="observacoes" rows="3" maxlength="3000">${esc(r[6] || "")}</textarea></label>
       <div class="row"><button type="submit" class="btn-pri">Salvar</button><button type="button" class="btn-sec" data-dlg-close>Cancelar</button></div>
       <p class="form-msg" role="status"></p>
     </form>`;
   }
   const edicao = (r, campo, valor) => ({ linha: r.linha, demanda: r.orig, campo, valor: String(valor) });
+  // demanda do site fica ligada pela solicitação; as da planilha pela linha e nome
+  const chaveVinc = r => r.sol ? { linha: 0, demanda: "sol:" + r.sol.id } : { linha: r.linha, demanda: r.orig };
+  const vinculoDe = r => r && Store.vinculos.find(v => (r.sol && v.demanda === "sol:" + r.sol.id) || (v.linha === r.linha && v.demanda === r.orig));
+  const postDoVinculo = v => todosPosts().find(x => x.conta === v.conta && x.data === String(v.data).slice(0, 10) && x.tema === v.tema);
+  // prazo mudou: o post ou evento ligado vai para o mesmo dia
+  async function moveVinculado(r, nova) {
+    const v = vinculoDe(r);
+    if (!v || !nova) return [];
+    if (v.tipo === "evento") {
+      const ev = Store.eventos.find(e => String(e.id) === String(v.evento_id));
+      if (ev && String(ev.data).slice(0, 10) !== nova) await Store.saveEvento(Object.assign({}, ev, { data: nova }));
+      return [];
+    }
+    const p = postDoVinculo(v);
+    if (!p || p.data === nova) return [];
+    await Store.updVinculo(v.id, { data: nova });
+    return [{ linha: 0, demanda: chavePost(Object.assign({}, p, p.base)), campo: "mover_post", valor: nova }];
+  }
+  const dm = d => `${String(d).slice(8, 10)}/${String(d).slice(5, 7)}`;
+  function opcoesCalendario() {
+    const desde = addMes(hojeSP().slice(0, 7), -1) + "-01";
+    const posts = todosPosts().filter(p => p.data >= desde).sort((a, b) => a.data < b.data ? -1 : a.data > b.data ? 1 : 0)
+      .map(p => ({ tipo: "post", conta: p.conta, data: p.data, tema: p.tema, rot: `${CONTA_NOME[p.conta]} · ${dm(p.data)} · ${p.formato} · ${p.tema}` }));
+    const evs = Store.eventos.filter(e => String(e.data).slice(0, 10) >= desde)
+      .map(e => ({ tipo: "evento", evento_id: e.id, data: String(e.data).slice(0, 10), rot: `Evento · ${dm(e.data)} · ${e.titulo}` }));
+    return posts.concat(evs);
+  }
+  function textoVinculo(v) {
+    if (!v) return "";
+    if (v.tipo === "evento") { const ev = Store.eventos.find(e => String(e.id) === String(v.evento_id)); return ev ? `Evento: ${ev.titulo} · ${cap(extenso(String(ev.data).slice(0, 10)))}` : ""; }
+    const p = postDoVinculo(v);
+    return p ? `${CONTA_NOME[p.conta]} · ${cap(extenso(p.data))} · ${p.formato} · ${p.tema}` : "";
+  }
 
   function htmlSol(s) {
     const prazo = String(s.prazo || "").slice(0, 10);
@@ -648,14 +711,31 @@
       muda("status", r[4] || "A fazer", el.status.value);
       muda("observacoes", r[6] || "", el.observacoes.value.trim());
       btn.disabled = true; msg.textContent = "Salvando…";
-      try { await Store.addEdicoes(novo); Cal.dlg.close(); notify(); }
+      try {
+        const atual = vinculoDe(r), esc_ = el.vinculo.value === "" ? null : r._op[+el.vinculo.value];
+        const mesmo = atual && esc_ && (atual.tipo === "evento" ? esc_.evento_id === atual.evento_id
+          : esc_.tipo === "post" && esc_.conta === atual.conta && esc_.data === String(atual.data).slice(0, 10) && esc_.tema === atual.tema);
+        if (!mesmo && (atual || esc_)) {
+          if (atual) await Store.delVinculo(atual.id);
+          if (esc_) await Store.addVinculo(Object.assign(chaveVinc(r), esc_.tipo === "evento"
+            ? { tipo: "evento", evento_id: esc_.evento_id } : { tipo: "post", conta: esc_.conta, data: esc_.data, tema: esc_.tema }));
+        }
+        const pz = novo.find(e => e.campo === "prazo");
+        if (pz) novo.push(...await moveVinculado(r, pz.valor));
+        await Store.addEdicoes(novo); Cal.dlg.close(); notify();
+      }
       catch (e) { msg.textContent = erroMsg(e); btn.disabled = false; }
       return;
     }
     if (f.hasAttribute("data-aceitar-form")) {
       const dp = f.elements.data_pub ? f.elements.data_pub.value : null;
       btn.disabled = true; msg.textContent = "Salvando…";
-      try { await Store.decide(f.dataset.id, "aceita", dp); Cal.dlg.close(); notify(); }
+      try {
+        await Store.decide(f.dataset.id, "aceita", dp);
+        const s = Store.sols.find(x => String(x.id) === String(f.dataset.id));
+        if (s && dp && ehPost(s)) await Store.addVinculo({ linha: 0, demanda: "sol:" + s.id, tipo: "post", conta: s.marca === "Tanyno" ? "Oficial" : "Glass", data: dp, tema: s.titulo });
+        Cal.dlg.close(); notify();
+      }
       catch (e) { msg.textContent = erroMsg(e); btn.disabled = false; }
       return;
     }
@@ -773,7 +853,10 @@
     verDemanda(r) { abre("dem-ver", null, r); },
     acoesDemanda(r) { abre("dem-acoes", null, r); },
     async editaCampo(r, campo, valor) {
-      try { await Store.addEdicoes([edicao(r, campo, valor)]); notify(); } catch (e) { alert(erroMsg(e)); notify(); }
+      try {
+        const extra = campo === "prazo" ? await moveVinculado(r, valor) : [];
+        await Store.addEdicoes([edicao(r, campo, valor)].concat(extra)); notify();
+      } catch (e) { alert(erroMsg(e)); notify(); }
     },
     async recusarDemanda(id) {
       const s = Store.sols.find(x => String(x.id) === String(id));
