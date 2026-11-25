@@ -261,6 +261,16 @@ dialog.cal-dlg::backdrop{background:rgba(20,20,20,.45)}
 .btn-ac:hover{background:#17663F}
 .sol-st{font-size:12px;font-weight:700;color:var(--muted)}
 .sol-st.ok{color:#1D6B45}
+.dem-b{font:inherit;cursor:pointer;border:0;background:none;padding:0;text-align:left;font-weight:700;color:var(--ink)}
+.dem-b:hover{text-decoration:underline;text-underline-offset:3px}
+tr.done .dem-b{color:#B8B8B8;text-decoration:line-through;text-decoration-color:#C8C8C8}
+.chk-b{font:inherit;cursor:pointer;border:0;background:none;padding:4px;border-radius:8px;line-height:0}
+.chk-b:hover .check{box-shadow:inset 0 0 0 1.5px var(--wine)}
+select.ed,input.ed{font:inherit;font-size:13px;border:1px solid #D6D6D6;border-radius:8px;padding:5px 8px;background:#fff;color:var(--ink);max-width:100%}
+select.ed:hover,input.ed:hover{border-color:var(--ink-2)}
+select.ed:focus-visible,input.ed:focus-visible,.dem-b:focus-visible,.chk-b:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.acoes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px}
+.acoes button{padding:12px 10px;font-size:14px}
 .det{font:inherit;cursor:pointer;display:inline-block;margin-left:8px;padding:2px 9px;border:1px solid #CFCFCF;border-radius:999px;background:var(--card);font-size:11.5px;font-weight:700;color:var(--ink-2);vertical-align:1px}
 .det:hover{border-color:var(--ink-2);color:var(--ink)}
 .form-msg{font-size:13px;color:var(--ink-2);margin:10px 0 0}
@@ -352,8 +362,16 @@ let D=null;
 const CRONO_SOL={"Tanyno":"Tanyno Oficial","Tanyno Glass":"Tanyno Glass"},POST_SOL=["Card feed","Reels","Carrossel","Stories"];
 function obsSol(s){let o=`Pedido pelo site: ${s.tipo}, ${s.marca}. Briefing completo no site.`;
   if(s.data_publicacao&&CRONO_SOL[s.marca]&&POST_SOL.includes(s.tipo)){const d=String(s.data_publicacao).slice(0,10);o+=` Publicação em ${d.slice(8,10)}/${d.slice(5,7)}/${d.slice(0,4)} (${CRONO_SOL[s.marca]}).`}return o}
-function demandasTodas(){return D.demandas.concat(Calendario.solicitacoes().filter(s=>s.situacao==="aceita"&&!s.na_planilha&&!D.demandas.some(r=>r[1]===s.titulo&&r[5]===s.criado_por))
-  .map(s=>[false,s.titulo,s.urgencia||"Média",String(s.prazo).slice(0,10),"A fazer",s.criado_por||"",obsSol(s)]))}
+// edições do site ainda não aplicadas na planilha aparecem por cima (a mais nova vale); r.linha e r.orig identificam a linha
+const EDCOL={feito:0,demanda:1,prioridade:2,prazo:3,status:4,observacoes:6};
+function demandasTodas(){const eds=Calendario.edicoes();
+  const base=D.demandas.map(r0=>{const r=r0.slice(0,7);r.linha=r0[7];r.orig=r0[1];
+    for(const e of eds)if(e.linha===r.linha&&e.demanda===r.orig){if(e.campo==="excluir")r.excluida=true;else r[EDCOL[e.campo]]=e.campo==="feito"?e.valor==="true":e.valor}
+    return r}).filter(r=>!r.excluida);
+  return base.concat(Calendario.solicitacoes().filter(s=>s.situacao==="aceita"&&!s.na_planilha&&!D.demandas.some(r=>r[1]===s.titulo&&r[5]===s.criado_por))
+  .map(s=>{const r=[false,s.titulo,s.urgencia||"Média",String(s.prazo).slice(0,10),"A fazer",s.criado_por||"",obsSol(s)];r.sol=s;return r}))}
+let LINHAS=[];   // linhas desenhadas na tabela (os botões apontam pelo índice)
+const sel=(campo,i,lista,v,vazio)=>`<select class="ed" data-ed="${campo}" data-i="${i}" aria-label="${campo==="prioridade"?"Prioridade":"Status"}">${!v&&vazio?`<option value="" selected disabled>${vazio}</option>`:""}${v&&!lista.includes(v)?`<option selected>${esc(v)}</option>`:""}${lista.map(x=>`<option${x===v?" selected":""}>${esc(x)}</option>`).join("")}</select>`;
 const R={
  demandas(){
   const t=today(),todas=demandasTodas(); const open=todas.filter(r=>!r[0]&&r[4]!=="Entregue");
@@ -361,7 +379,7 @@ const R={
   const rows=[...todas].sort((a,b)=>(a[0]-b[0])||((a[3]||"9")>(b[3]||"9")?1:(a[3]||"9")<(b[3]||"9")?-1:0)||(pr[a[2]||""]-pr[b[2]||""]));
   const late=open.filter(r=>r[3]&&r[3].slice(0,10)<t).length, hoje=open.filter(r=>r[3]&&r[3].slice(0,10)===t).length;
   // demanda pedida pelo site = mesma Demanda e mesmo Pedido por na planilha
-  const sols=Calendario.solicitacoes(), solDe=r=>sols.find(s=>s.titulo===r[1]&&s.criado_por===r[5]);
+  const sols=Calendario.solicitacoes(), solDe=r=>r.sol||sols.find(s=>s.titulo===(r.orig||r[1])&&s.criado_por===r[5]);
   // só as novas: aceita vira demanda normal na tabela, recusada some
   const pend=sols.filter(s=>(s.situacao||"pendente")==="pendente");
   const gestor=Calendario.podeAceitar();
@@ -375,9 +393,15 @@ const R={
    <div class="stat"><b>${D.concluidos.length}</b><span>Concluídas</span></div></div>
    ${pend.length?`<section class="sols" aria-labelledby="sols-t"><h2 id="sols-t">Enviadas pelo site</h2><p class="lead">Novas, aguardando aceite. A aceita vai na hora para as demandas abaixo; se for publicação, entra no cronograma na próxima atualização automática.</p><div class="sol-l">${pend.map(s=>`<div class="sol"><button type="button" class="sol-b" data-sol="${esc(s.id)}"><b>${esc(s.titulo)}</b><span>${esc(s.tipo)} · ${esc(s.marca)} · prazo ${fmt(String(s.prazo).slice(0,10))}</span><span>Pedido por ${esc(s.criado_por)}</span></button>${acao(s)}</div>`).join("")}</div></section>`:""}
    <p class="lead">Ordenadas por prazo. As riscadas já foram feitas e vão para Concluídos no fim do dia.</p>`+
-   card(["Feito","Demanda","Prioridade","Prazo","Status","Observações"],rows.map(r=>{
+   card(["Feito","Demanda","Prioridade","Prazo","Status","Observações"],(LINHAS=rows).map((r,i)=>{
+     r.sol=solDe(r);
      const done=r[0]||r[4]==="Entregue"; const d=r[3]?r[3].slice(0,10):""; const lt=!done&&d&&d<t; const hj=!done&&d===t;
-     return `<tr class="${done?"done":""} ${lt?"late":""} ${hj?"today":""}"><td class="c" data-l="Feito">${box(done)}</td><td class="main" data-l="Demanda">${esc(r[1])}${(s=>s?`<button type="button" class="det" data-sol="${esc(s.id)}">Ver briefing</button>`:"")(solDe(r))}</td><td data-l="Prioridade">${pill("p-"+r[2],r[2])}</td><td class="date" data-l="Prazo">${fmt(r[3])}${lt?`<span class="when">atrasada</span>`:hj?`<span class="when">hoje</span>`:""}</td><td data-l="Status">${pill(sk(done?"Feito":r[4]),done?"Feito":r[4])}</td><td class="note" data-l="Observações">${esc(r[6])}</td></tr>`}).join(""))},
+     const ed=gestor&&r.linha;   // só linhas que já estão na planilha, e só para quem decide
+     const feito=ed?`<button type="button" class="chk-b" data-acoes="${i}" aria-label="Concluir, editar ou excluir: ${esc(r[1])}">${box(r[0])}</button>`:box(done);
+     const pri=ed?sel("prioridade",i,["Alta","Média","Baixa"],r[2],"Definir"):pill("p-"+r[2],r[2]);
+     const prazo=ed?`<input type="date" class="ed" data-ed="prazo" data-i="${i}" value="${esc(d)}" aria-label="Prazo">`:fmt(r[3]);
+     const st=ed?sel("status",i,["A fazer","Em andamento","Aprovação","Aguardando","Entregue"],r[4]||"A fazer"):pill(sk(done?"Feito":r[4]),done?"Feito":r[4]);
+     return `<tr class="${done?"done":""} ${lt?"late":""} ${hj?"today":""}"><td class="c" data-l="Feito">${feito}</td><td class="main" data-l="Demanda"><button type="button" class="dem-b" data-ver="${i}">${esc(r[1])}</button></td><td data-l="Prioridade">${pri}</td><td class="date" data-l="Prazo">${prazo}${lt?`<span class="when">atrasada</span>`:hj?`<span class="when">hoje</span>`:""}</td><td data-l="Status">${st}</td><td class="note" data-l="Observações">${esc(r[6])}</td></tr>`}).join(""))},
  digital(){return barra("Digital")+`<p class="lead">Tarefas recorrentes de RD Station, Meta Ads e canais digitais.</p>`+
    card(["Feito","Tarefa","Frequência","Quando","Observações"],D.digital.map(r=>`<tr class="${r[0]?"done":""}"><td class="c" data-l="Feito">${box(r[0])}</td><td class="main" data-l="Tarefa">${esc(r[1])}</td><td data-l="Frequência"><span class="tag">${esc(r[2])}</span></td><td data-l="Quando">${esc(r[3])}</td><td class="note" data-l="Observações">${esc(r[4])}</td></tr>`).join(""))},
  site(){let g="";return barra("Rotina mensal do site")+`<p class="lead">Até dia 20 a Talita decide · entre dia 20 e dia 1 o Rodrigo produz · dia 1 o Rodrigo publica.</p>`+
@@ -442,7 +466,10 @@ document.getElementById("scrim").addEventListener("click",()=>menu(false,true));
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&document.body.classList.contains("menu-aberto"))menu(false,true)});
 document.getElementById("view").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
   if(b.hasAttribute("data-nova-demanda"))Calendario.novaDemanda();else if(b.dataset.sol)Calendario.verSolicitacao(b.dataset.sol);
-  else if(b.dataset.aceitar)Calendario.aceitarDemanda(b.dataset.aceitar);else if(b.dataset.recusar)Calendario.recusarDemanda(b.dataset.recusar)});
+  else if(b.dataset.aceitar)Calendario.aceitarDemanda(b.dataset.aceitar);else if(b.dataset.recusar)Calendario.recusarDemanda(b.dataset.recusar);
+  else if(b.dataset.ver)Calendario.verDemanda(LINHAS[+b.dataset.ver]);else if(b.dataset.acoes)Calendario.acoesDemanda(LINHAS[+b.dataset.acoes])});
+document.getElementById("view").addEventListener("change",e=>{const c=e.target.closest("[data-ed]");if(!c||!c.value)return;
+  const r=LINHAS[+c.dataset.i];if(r)Calendario.editaCampo(r,c.dataset.ed,c.value)});
 Calendario.onUpdate=()=>{const u=Calendario.store.user;
   if(!u||!u.permitido){if(D)fechaAgenda();abreAgenda();return}
   if(!D){abreAgenda();return}

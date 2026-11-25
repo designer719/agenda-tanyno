@@ -37,7 +37,7 @@
 
   /* ---------- dados compartilhados (Supabase, ou memória no modo demonstração) ---------- */
   const Store = {
-    mode: "off", erro: "", user: null, aprov: [], eventos: [], sols: [], client: null,
+    mode: "off", erro: "", user: null, aprov: [], eventos: [], sols: [], edicoes: [], client: null,
 
     async init() {
       const q = new URLSearchParams(location.search);
@@ -86,7 +86,7 @@
     async refresh() {
       if (this.mode === "demo") return;
       // sem acesso o banco recusa a leitura (só e-mails permitidos leem): nada a buscar
-      if (!(this.user && this.user.permitido)) { this.aprov = []; this.eventos = []; this.sols = []; return; }
+      if (!(this.user && this.user.permitido)) { this.aprov = []; this.eventos = []; this.sols = []; this.edicoes = []; return; }
       const [a, e] = await Promise.all([
         this.client.from("aprovacoes").select("*").order("criado_em", { ascending: false }),
         this.client.from("eventos").select("*").order("data", { ascending: true })
@@ -99,6 +99,9 @@
       if (this.user && this.user.permitido) { // briefing só para quem tem acesso
         const s = await this.client.from("solicitacoes").select("*").order("criado_em", { ascending: false });
         if (!s.error) this.sols = s.data || [];
+        // edições das demandas ainda não aplicadas na planilha (o site mostra por cima)
+        const ed = await this.client.from("edicoes_demandas").select("*").eq("aplicada", false).order("criado_em", { ascending: true });
+        this.edicoes = ed.error ? [] : ed.data || [];
       }
     },
 
@@ -121,6 +124,17 @@
         return;
       }
       const { error } = await this.client.rpc("decide_solicitacao", { sol: id, decisao, data_pub: dataPub || null });
+      if (error) throw error;
+      await this.refresh();
+    },
+
+    async addEdicoes(lista) { // [{linha, demanda, campo, valor}]
+      if (!lista.length) return;
+      if (this.mode === "demo") {
+        lista.forEach((e, i) => this.edicoes.push(Object.assign({ id: "e" + Date.now() + i, criado_por: this.user.nome, criado_em: new Date().toISOString(), aplicada: false }, e)));
+        return;
+      }
+      const { error } = await this.client.from("edicoes_demandas").insert(lista);
       if (error) throw error;
       await this.refresh();
     },
@@ -460,6 +474,46 @@
     </form>`;
   }
 
+  // ---------- demandas da planilha: ver, ações do check e editar ----------
+  const PRIORIDADES = ["Alta", "Média", "Baixa"], STATUS = ["A fazer", "Em andamento", "Aprovação", "Aguardando", "Entregue"];
+  const dmyBR = d => d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : "";
+  function htmlDemVer(r) {
+    const s = r.sol, prazo = String(r[3] || "").slice(0, 10), gestor = !!(Store.user && Store.user.gestor);
+    return `<div class="dlg-h"><div class="dlg-meta">${r[0] ? `<span class="stp st-Publicado">Concluída</span>` : r[4] ? `<span class="pc-fmt">${esc(r[4])}</span>` : ""}${prazo ? `<span class="dlg-data">Prazo: ${cap(extenso(prazo))}</span>` : ""}</div>${fechar}</div>
+      <h3 class="dlg-t" id="dlg-titulo">${esc(r[1])}</h3>
+      <dl class="dlg-dl">${campo("Prioridade", r[2])}${campo("Status", r[0] ? "Feito" : r[4])}${campo("Pedido por", r[5])}${r[6] ? `<div class="dl-i"><dt>Observações</dt><dd class="pre">${esc(r[6])}</dd></div>` : ""}</dl>
+      ${s ? `<section class="apr" aria-label="Briefing"><h4>Briefing enviado pelo site</h4><dl class="dlg-dl">
+        ${campo("Tipo de peça", s.tipo)}${campo("Marca", s.marca)}${campo("Urgência", s.urgencia)}${s.data_publicacao ? campo("Data de publicação", dmyBR(String(s.data_publicacao).slice(0, 10))) : ""}
+        ${SOL_CAMPOS.map(([k, rot]) => s[k] ? `<div class="dl-i"><dt>${rot}</dt><dd class="pre">${k === "links" ? comLinks(s[k]) : esc(s[k])}</dd></div>` : "").join("")}
+        </dl><p class="muted small">Pedido por ${esc(s.criado_por || "")}${s.criado_em ? " em " + quando(s.criado_em) : ""}</p></section>` : ""}
+      <div class="row">${gestor && r.linha ? `<button type="button" class="btn-pri" data-dem-editar>Editar</button>` : ""}<button type="button" class="btn-sec" data-dlg-close>Fechar</button></div>`;
+  }
+  function htmlDemAcoes(r) {
+    return `<div class="dlg-h"><h3 class="dlg-t" id="dlg-titulo">${esc(r[1])}</h3>${fechar}</div>
+      <p class="muted small">A mudança aparece na hora aqui e vai para a planilha na próxima atualização automática.</p>
+      <div class="acoes">
+        <button type="button" class="btn-ac" data-dem-feito>${r[0] ? "Reabrir" : "Concluir"}</button>
+        <button type="button" class="btn-sec" data-dem-editar>Editar</button>
+        <button type="button" class="btn-del" data-dem-excluir>Excluir</button>
+      </div>`;
+  }
+  function htmlDemEditar(r) {
+    const op = (lista, sel) => `${sel && !lista.includes(sel) ? `<option selected>${esc(sel)}</option>` : ""}${!sel ? `<option value="" selected>Sem prioridade</option>` : ""}` + lista.map(x => `<option${x === sel ? " selected" : ""}>${esc(x)}</option>`).join("");
+    return `<form class="ev-form" data-dem-editar-form>
+      <div class="dlg-h"><h3 class="dlg-t" id="dlg-titulo">Editar demanda</h3>${fechar}</div>
+      <label class="fl">Demanda<input name="demanda" required maxlength="300" value="${esc(r[1])}"></label>
+      <div class="row2">
+        <label class="fl">Prioridade<select name="prioridade">${op(PRIORIDADES, r[2])}</select></label>
+        <label class="fl">Prazo<input type="date" name="prazo" value="${esc(String(r[3] || "").slice(0, 10))}"></label>
+      </div>
+      <label class="fl">Status<select name="status">${op(STATUS, r[4] || "A fazer")}</select></label>
+      <label class="fl">Observações<textarea name="observacoes" rows="3" maxlength="3000">${esc(r[6] || "")}</textarea></label>
+      <div class="row"><button type="submit" class="btn-pri">Salvar</button><button type="button" class="btn-sec" data-dlg-close>Cancelar</button></div>
+      <p class="form-msg" role="status"></p>
+    </form>`;
+  }
+  const edicao = (r, campo, valor) => ({ linha: r.linha, demanda: r.orig, campo, valor: String(valor) });
+
   function htmlSol(s) {
     const prazo = String(s.prazo || "").slice(0, 10);
     return `<div class="dlg-h"><div class="dlg-meta"><span class="pc-fmt">${esc(s.tipo)}</span><span class="dlg-data">${esc(s.marca)}</span></div>${fechar}</div>
@@ -501,6 +555,9 @@
     else if (a.tipo === "empresa") { const x = Cal.empresa[+a.id]; if (!x) return Cal.dlg.close(); h = htmlEmpresa(x, a.extra); }
     else if (a.tipo === "aniv") { const x = Cal.anivs[+a.id]; if (!x) return Cal.dlg.close(); h = htmlAniv(x, a.extra); }
     else if (a.tipo === "demanda") h = htmlDemanda();
+    else if (a.tipo === "dem-ver") h = htmlDemVer(a.extra);
+    else if (a.tipo === "dem-acoes") h = htmlDemAcoes(a.extra);
+    else if (a.tipo === "dem-editar") h = htmlDemEditar(a.extra);
     else if (a.tipo === "aceitar") { const s = Store.sols.find(x => String(x.id) === String(a.id)); if (!s) return Cal.dlg.close(); h = htmlAceitar(s); }
     else if (a.tipo === "demanda-ok") h = htmlDemandaOk(a.extra || {});
     else if (a.tipo === "sol") { const s = Store.sols.find(x => String(x.id) === String(a.id)); if (!s) return Cal.dlg.close(); h = htmlSol(s); }
@@ -521,6 +578,20 @@
     if (b.hasAttribute("data-cal-login")) { abre("login"); return; }
     if (b.dataset.nav) { abre("post", b.dataset.nav); return; }
     if (b.dataset.verSol) { abre("sol", b.dataset.verSol); return; }
+    const r = Cal.aberto && Cal.aberto.extra;
+    if (b.hasAttribute("data-dem-editar")) { abre("dem-editar", null, r); return; }
+    if (b.hasAttribute("data-dem-feito")) {
+      b.disabled = true;
+      try { await Store.addEdicoes([edicao(r, "feito", !r[0])]); Cal.dlg.close(); notify(); }
+      catch (e) { alert(erroMsg(e)); b.disabled = false; }
+      return;
+    }
+    if (b.hasAttribute("data-dem-excluir")) {
+      if (!confirm(`Excluir a demanda "${r[1]}"? Ela sai do site agora e da planilha na próxima atualização.`)) return;
+      try { await Store.addEdicoes([edicao(r, "excluir", "sim")]); Cal.dlg.close(); notify(); }
+      catch (e) { alert(erroMsg(e)); }
+      return;
+    }
     if (b.dataset.apr === "aprovado") {
       b.disabled = true;
       try { await Store.addAprov(Cal.aberto.id, "aprovado", ""); notify(); }
@@ -563,6 +634,20 @@
         notify();
         if (salvo) abre("evento", salvo); else Cal.dlg.close();
       } catch (e) { msg.textContent = erroMsg(e); btn.disabled = false; }
+      return;
+    }
+    if (f.hasAttribute("data-dem-editar-form")) {
+      const r = Cal.aberto.extra, el = f.elements, novo = [];
+      const muda = (campo, atual, valor) => { if (valor !== atual && !(campo === "prioridade" && !valor)) novo.push(edicao(r, campo, valor)); };
+      if (!el.demanda.value.trim()) { el.demanda.focus(); return; }
+      muda("demanda", r[1], el.demanda.value.trim());
+      muda("prioridade", r[2] || "", el.prioridade.value);
+      if (el.prazo.value) muda("prazo", String(r[3] || "").slice(0, 10), el.prazo.value);
+      muda("status", r[4] || "A fazer", el.status.value);
+      muda("observacoes", r[6] || "", el.observacoes.value.trim());
+      btn.disabled = true; msg.textContent = "Salvando…";
+      try { await Store.addEdicoes(novo); Cal.dlg.close(); notify(); }
+      catch (e) { msg.textContent = erroMsg(e); btn.disabled = false; }
       return;
     }
     if (f.hasAttribute("data-aceitar-form")) {
@@ -682,6 +767,12 @@
     verSolicitacao(id) { abre("sol", id); },
     podeAceitar: () => !!(Store.user && Store.user.gestor),
     aceitarDemanda(id) { abre("aceitar", id); },
+    edicoes: () => Store.edicoes,
+    verDemanda(r) { abre("dem-ver", null, r); },
+    acoesDemanda(r) { abre("dem-acoes", null, r); },
+    async editaCampo(r, campo, valor) {
+      try { await Store.addEdicoes([edicao(r, campo, valor)]); notify(); } catch (e) { alert(erroMsg(e)); notify(); }
+    },
     async recusarDemanda(id) {
       const s = Store.sols.find(x => String(x.id) === String(id));
       if (!s || !confirm(`Recusar "${s.titulo}"? Ela some da lista.`)) return;
