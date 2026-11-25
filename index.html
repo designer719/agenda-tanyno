@@ -264,7 +264,8 @@ dialog.cal-dlg::backdrop{background:rgba(20,20,20,.45)}
 .dem-b{font:inherit;cursor:pointer;border:0;background:none;padding:0;text-align:left;font-weight:700;color:var(--ink)}
 .dem-b:hover{text-decoration:underline;text-underline-offset:3px}
 tr.done .dem-b{color:#B8B8B8;text-decoration:line-through;text-decoration-color:#C8C8C8}
-.dem-l{display:flex;align-items:flex-start;gap:8px}
+td.ac{width:56px;text-align:right}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .lapis{font:inherit;cursor:pointer;flex:none;display:inline-grid;place-items:center;width:28px;height:28px;border:1px solid #D6D6D6;border-radius:8px;background:var(--card);color:var(--ink-2);padding:0;font-size:11px;font-weight:700}
 .lapis svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .lapis:hover{border-color:var(--ink-2);color:var(--ink)}
@@ -322,6 +323,7 @@ select.ed:focus-visible,input.ed:focus-visible,.dem-b:focus-visible,.chk-b:focus
   td.main{font-size:16px;padding-right:32px}
   td.c{position:absolute;right:14px;top:14px;width:auto;padding:0}
   td.c.n0{position:static;padding:0 0 2px}
+  td.ac{width:auto;text-align:right;padding-top:8px}
   td[data-l]:not(.main):not(.c)::before{content:attr(data-l);display:inline-block;min-width:96px;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
   td:empty{display:none}
   td.note{padding-top:6px}
@@ -404,7 +406,7 @@ const R={
    <div class="stat"><b>${D.concluidos.length}</b><span>Concluídas</span></div></div>
    ${pend.length?`<section class="sols" aria-labelledby="sols-t"><h2 id="sols-t">Enviadas pelo site</h2><p class="lead">Novas, aguardando aceite. A aceita vai na hora para as demandas abaixo; se for publicação, entra no cronograma na próxima atualização automática.</p><div class="sol-l">${pend.map(s=>`<div class="sol"><button type="button" class="sol-b" data-sol="${esc(s.id)}"><b>${esc(s.titulo)}</b><span>${esc(s.tipo)} · ${esc(s.marca)} · prazo ${fmt(String(s.prazo).slice(0,10))}</span><span>Pedido por ${esc(s.criado_por)}</span></button>${acao(s)}</div>`).join("")}</div></section>`:""}
    <p class="lead">Ordenadas por prazo. As riscadas já foram feitas e vão para Concluídos no fim do dia.</p>`+
-   card(["Feito","Demanda","Prioridade","Prazo","Status","Observações"],(LINHAS=rows).map((r,i)=>{
+   card(["Feito","Demanda","Prioridade","Prazo","Status","Observações"].concat(gestor?['<span class="sr">Editar</span>']:[]),(LINHAS=rows).map((r,i)=>{
      r.sol=solDe(r);
      const done=r[0]||r[4]==="Entregue"; const d=r[3]?r[3].slice(0,10):""; const lt=!done&&d&&d<t; const hj=!done&&d===t;
      const pode=gestor&&r.linha!==undefined;   // só para quem decide (a provisória tem linha 0)
@@ -414,7 +416,7 @@ const R={
      const pri=ed?sel("prioridade",i,["Alta","Média","Baixa"],r[2],"Definir"):pill("p-"+r[2],r[2]);
      const prazo=ed?`<input type="date" class="ed" data-ed="prazo" data-i="${i}" value="${esc(d)}" aria-label="Prazo">`:fmt(r[3]);
      const st=ed?sel("status",i,["A fazer","Em andamento","Aprovação","Aguardando","Entregue"],r[4]||"A fazer"):pill(sk(done?"Feito":r[4]),done?"Feito":r[4]);
-     return `<tr class="${done?"done":""} ${lt?"late":""} ${hj?"today":""}"><td class="c" data-l="Feito">${feito}</td><td class="main" data-l="Demanda"><span class="dem-l"><button type="button" class="dem-b" data-ver="${i}">${esc(r[1])}</button>${lapis}</span></td><td data-l="Prioridade">${pri}</td><td class="date" data-l="Prazo">${prazo}${lt?`<span class="when">atrasada</span>`:hj?`<span class="when">hoje</span>`:""}</td><td data-l="Status">${st}</td><td class="note" data-l="Observações">${esc(r[6])}</td></tr>`}).join(""))},
+     return `<tr class="${done?"done":""} ${lt?"late":""} ${hj?"today":""}"><td class="c" data-l="Feito">${feito}</td><td class="main" data-l="Demanda"><button type="button" class="dem-b" data-ver="${i}">${esc(r[1])}</button></td><td data-l="Prioridade">${pri}</td><td class="date" data-l="Prazo">${prazo}${lt?`<span class="when">atrasada</span>`:hj?`<span class="when">hoje</span>`:""}</td><td data-l="Status">${st}</td><td class="note" data-l="Observações">${esc(r[6])}</td>${gestor?`<td class="ac">${lapis}</td>`:""}</tr>`}).join(""))},
  digital(){return barra("Digital")+`<p class="lead">Tarefas recorrentes de RD Station, Meta Ads e canais digitais.</p>`+
    card(["Feito","Tarefa","Frequência","Quando","Observações"],D.digital.map(r=>`<tr class="${r[0]?"done":""}"><td class="c" data-l="Feito">${box(r[0])}</td><td class="main" data-l="Tarefa">${esc(r[1])}</td><td data-l="Frequência"><span class="tag">${esc(r[2])}</span></td><td data-l="Quando">${esc(r[3])}</td><td class="note" data-l="Observações">${esc(r[4])}</td></tr>`).join(""))},
  site(){let g="";return barra("Rotina mensal do site")+`<p class="lead">Até dia 20 a Talita decide · entre dia 20 e dia 1 o Rodrigo produz · dia 1 o Rodrigo publica.</p>`+
