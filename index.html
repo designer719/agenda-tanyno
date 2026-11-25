@@ -86,6 +86,9 @@ tr.late td.date{color:var(--wine);font-weight:700}
 
 .pill{display:inline-block;padding:4px 11px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
 .p-Alta{background:var(--wine);color:#fff}
+.pz{background:#EFEFEF;color:var(--ink)}
+.pz-hoje{background:var(--wine-soft);color:var(--wine)}
+.pz-atr{background:var(--wine);color:#fff}
 .p-Média{background:#DCDCDC;color:var(--ink)}
 .p-Baixa{background:var(--soft);color:var(--muted)}
 .s-A_fazer{box-shadow:inset 0 0 0 1px #CFCFCF;color:var(--ink-2)}
@@ -414,9 +417,11 @@ const R={
      const lapis=pode?`<button type="button" class="lapis${ed?" on":""}" data-lapis="${i}" aria-pressed="${ed}" aria-label="${ed?"Terminar a edição":"Editar prioridade, prazo e status"}: ${esc(r[1])}" title="${ed?"Terminar a edição":"Editar prioridade, prazo e status"}">${ed?"OK":LAPIS}</button>`:"";
      const feito=pode?`<button type="button" class="chk-b" data-acoes="${i}" aria-label="Concluir, editar ou excluir: ${esc(r[1])}">${box(r[0])}</button>`:box(done);
      const pri=ed?sel("prioridade",i,["Alta","Média","Baixa"],r[2],"Definir"):pill("p-"+r[2],r[2]);
-     const prazo=ed?`<input type="date" class="ed" data-ed="prazo" data-i="${i}" value="${esc(d)}" aria-label="Prazo">`:fmt(r[3]);
+     // prazo como etiqueta, no mesmo visual de Prioridade e Status
+     const prazo=ed?`<input type="date" class="ed" data-ed="prazo" data-i="${i}" value="${esc(d)}" aria-label="Prazo">`
+       :!d?"":hj?pill("pz pz-hoje","Hoje"):lt?pill("pz pz-atr",`${fmt(d)} · atrasada`):pill("pz",fmt(d));
      const st=ed?sel("status",i,["A fazer","Em andamento","Aprovação","Aguardando","Entregue"],r[4]||"A fazer"):pill(sk(done?"Feito":r[4]),done?"Feito":r[4]);
-     return `<tr class="${done?"done":""} ${lt?"late":""} ${hj?"today":""}"><td class="c" data-l="Feito">${feito}</td><td class="main" data-l="Demanda"><button type="button" class="dem-b" data-ver="${i}">${esc(r[1])}</button></td><td data-l="Prioridade">${pri}</td><td class="date" data-l="Prazo">${prazo}${lt?`<span class="when">atrasada</span>`:hj?`<span class="when">hoje</span>`:""}</td><td data-l="Status">${st}</td><td class="note" data-l="Observações">${esc(r[6])}</td>${gestor?`<td class="ac">${lapis}</td>`:""}</tr>`}).join(""))},
+     return `<tr class="${done?"done":""} ${lt?"late":""} ${hj?"today":""}"><td class="c" data-l="Feito">${feito}</td><td class="main" data-l="Demanda"><button type="button" class="dem-b" data-ver="${i}">${esc(r[1])}</button></td><td data-l="Prioridade">${pri}</td><td class="date" data-l="Prazo">${prazo}</td><td data-l="Status">${st}</td><td class="note" data-l="Observações">${esc(r[6])}</td>${gestor?`<td class="ac">${lapis}</td>`:""}</tr>`}).join(""))},
  digital(){return barra("Digital")+`<p class="lead">Tarefas recorrentes de RD Station, Meta Ads e canais digitais.</p>`+
    card(["Feito","Tarefa","Frequência","Quando","Observações"],D.digital.map(r=>`<tr class="${r[0]?"done":""}"><td class="c" data-l="Feito">${box(r[0])}</td><td class="main" data-l="Tarefa">${esc(r[1])}</td><td data-l="Frequência"><span class="tag">${esc(r[2])}</span></td><td data-l="Quando">${esc(r[3])}</td><td class="note" data-l="Observações">${esc(r[4])}</td></tr>`).join(""))},
  site(){let g="";return barra("Rotina mensal do site")+`<p class="lead">Até dia 20 a Talita decide · entre dia 20 e dia 1 o Rodrigo produz · dia 1 o Rodrigo publica.</p>`+
