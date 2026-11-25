@@ -43,7 +43,7 @@
       const q = new URLSearchParams(location.search);
       if (q.get("demo") === "1" || q.get("demo") === "anon") {
         this.mode = "demo";
-        this.user = q.get("demo") === "anon" ? null : { email: "", nome: "Demonstração", permitido: true };
+        this.user = q.get("demo") === "anon" ? null : { email: "", nome: "Demonstração", permitido: true, gestor: true };
         this.eventos = [{ id: "demo-1", data: "2026-11-27", titulo: "Black Friday", tipo: "Data comemorativa", conta: "Ambas", descricao: "Exemplo do modo demonstração.", criado_por: "Demonstração", criado_em: new Date().toISOString() }];
         return;
       }
@@ -78,6 +78,7 @@
       try {
         const { data, error } = await this.client.rpc("meu_nome");
         if (!error && data) { u.nome = data; u.permitido = true; }
+        if (u.permitido) { const g = await this.client.rpc("posso_aceitar"); u.gestor = !g.error && g.data === true; }
       } catch (e) { /* sem permissão ou fora do ar */ }
       this.user = u;
     },
@@ -111,6 +112,17 @@
       if (error) throw error;
       if (!data) throw new Error("agenda vazia");
       return data.dados;
+    },
+
+    async decide(id, decisao, dataPub) { // só quem aceita demandas (o banco confere de novo)
+      if (this.mode === "demo") {
+        const x = this.sols.find(s => String(s.id) === String(id));
+        if (x) Object.assign(x, { situacao: decisao, data_publicacao: decisao === "aceita" ? dataPub || null : null, decidido_por: this.user.nome });
+        return;
+      }
+      const { error } = await this.client.rpc("decide_solicitacao", { sol: id, decisao, data_pub: dataPub || null });
+      if (error) throw error;
+      await this.refresh();
     },
 
     async addSolicitacao(campos) {
@@ -160,7 +172,7 @@
     },
 
     async signIn(email, senha) {
-      if (this.mode === "demo") { this.user = { email, nome: "Demonstração", permitido: true }; setTimeout(notify, 0); return; }
+      if (this.mode === "demo") { this.user = { email, nome: "Demonstração", permitido: true, gestor: true }; setTimeout(notify, 0); return; }
       const { error } = await this.client.auth.signInWithPassword({ email, password: senha });
       if (error) throw new Error(/invalid login|credentials/i.test(error.message) ? "E-mail ou senha incorretos." : error.message);
     },
@@ -419,6 +431,23 @@
   // só http(s) vira link; o resto é texto escapado
   const comLinks = t => String(t || "").split(/(https?:\/\/[^\s<>"']+)/).map((x, i) => i % 2
     ? `<a href="${esc(x)}" target="_blank" rel="noopener noreferrer">${esc(x)}</a>` : esc(x)).join("");
+  // publicação = tipo que vai para o cronograma e marca que tem cronograma
+  const CRONO = { "Tanyno": "Tanyno Oficial", "Tanyno Glass": "Tanyno Glass" };
+  const FORMATO = { "Card feed": "Foto única", "Reels": "Reels", "Carrossel": "Carrossel", "Stories": "Stories" };
+  const ehPost = s => !!(CRONO[s.marca] && FORMATO[s.tipo]);
+  function htmlAceitar(s) {
+    const hoje = hojeSP(), prazo = String(s.prazo || "").slice(0, 10), sug = prazo && prazo >= hoje ? prazo : hoje;
+    return `<form class="ev-form" data-aceitar-form data-id="${esc(s.id)}">
+      <div class="dlg-h"><h3 class="dlg-t" id="dlg-titulo">Aceitar demanda</h3>${fechar}</div>
+      <p class="ev-desc"><b>${esc(s.titulo)}</b><br><span class="muted">${esc(s.tipo)} · ${esc(s.marca)} · pedido por ${esc(s.criado_por || "")}</span></p>
+      ${ehPost(s) ? `<label class="fl">Data de publicação<input type="date" name="data_pub" required min="${hoje}" value="${sug}"></label>
+        <p class="muted small">Entra nas suas demandas e no cronograma ${esc(CRONO[s.marca])} como ${esc(FORMATO[s.tipo])}, na próxima atualização automática.</p>`
+        : `<p class="muted small">Entra nas suas demandas na próxima atualização automática.</p>`}
+      <div class="row"><button type="submit" class="btn-pri">Aceitar</button><button type="button" class="btn-sec" data-dlg-close>Cancelar</button></div>
+      <p class="form-msg" role="status"></p>
+    </form>`;
+  }
+
   function htmlSol(s) {
     const prazo = String(s.prazo || "").slice(0, 10);
     return `<div class="dlg-h"><div class="dlg-meta"><span class="pc-fmt">${esc(s.tipo)}</span><span class="dlg-data">${esc(s.marca)}</span></div>${fechar}</div>
@@ -460,6 +489,7 @@
     else if (a.tipo === "empresa") { const x = Cal.empresa[+a.id]; if (!x) return Cal.dlg.close(); h = htmlEmpresa(x, a.extra); }
     else if (a.tipo === "aniv") { const x = Cal.anivs[+a.id]; if (!x) return Cal.dlg.close(); h = htmlAniv(x, a.extra); }
     else if (a.tipo === "demanda") h = htmlDemanda();
+    else if (a.tipo === "aceitar") { const s = Store.sols.find(x => String(x.id) === String(a.id)); if (!s) return Cal.dlg.close(); h = htmlAceitar(s); }
     else if (a.tipo === "demanda-ok") h = htmlDemandaOk(a.extra || {});
     else if (a.tipo === "sol") { const s = Store.sols.find(x => String(x.id) === String(a.id)); if (!s) return Cal.dlg.close(); h = htmlSol(s); }
     Cal.dlg.innerHTML = `<div class="dlg-in">${h}</div>`;
@@ -520,6 +550,13 @@
         notify();
         if (salvo) abre("evento", salvo); else Cal.dlg.close();
       } catch (e) { msg.textContent = erroMsg(e); btn.disabled = false; }
+      return;
+    }
+    if (f.hasAttribute("data-aceitar-form")) {
+      const dp = f.elements.data_pub ? f.elements.data_pub.value : null;
+      btn.disabled = true; msg.textContent = "Salvando…";
+      try { await Store.decide(f.dataset.id, "aceita", dp); Cal.dlg.close(); notify(); }
+      catch (e) { msg.textContent = erroMsg(e); btn.disabled = false; }
       return;
     }
     if (f.hasAttribute("data-dem-form")) {
@@ -630,6 +667,13 @@
       abre("demanda");
     },
     verSolicitacao(id) { abre("sol", id); },
+    podeAceitar: () => !!(Store.user && Store.user.gestor),
+    aceitarDemanda(id) { abre("aceitar", id); },
+    async recusarDemanda(id) {
+      const s = Store.sols.find(x => String(x.id) === String(id));
+      if (!s || !confirm(`Recusar "${s.titulo}"? Ela some da lista.`)) return;
+      try { await Store.decide(id, "recusada"); notify(); } catch (e) { alert(erroMsg(e)); }
+    },
     carregaAgenda: () => Store.carregaAgenda(),
     async entrar(email, senha) { await Store.signIn(email, senha); },
     async sair() { await Store.signOut(); notify(); }
