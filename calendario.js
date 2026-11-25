@@ -41,6 +41,11 @@
         this.eventos = [{ id: "demo-1", data: "2026-11-27", titulo: "Black Friday", tipo: "Data comemorativa", conta: "Ambas", descricao: "Exemplo do modo demonstração.", criado_por: "Demonstração", criado_em: new Date().toISOString() }];
         return;
       }
+      // erro devolvido pelo link do e-mail (link expirado, endereço não autorizado...)
+      const h = new URLSearchParams(location.hash.replace(/^#/, ""));
+      const qe = new URLSearchParams(location.search);
+      const desc = h.get("error_description") || qe.get("error_description");
+      if (desc) this.authErro = desc.replace(/\+/g, " ");
       const c = window.AGENDA_CONFIG || {};
       if (!c.SUPABASE_URL || !c.SUPABASE_ANON_KEY) { this.mode = "off"; this.erro = "config"; return; }
       if (!window.supabase || !window.supabase.createClient) { this.mode = "off"; this.erro = "rede"; return; }
@@ -185,6 +190,7 @@
     if (Store.mode === "demo") aviso = "Modo demonstração: aprovações e eventos ficam só neste navegador e somem ao recarregar a página.";
     else if (Store.erro === "config") aviso = "Aprovações e eventos ainda não estão ligados (falta configurar o Supabase). Os posts aparecem normalmente.";
     else if (Store.erro === "rede") aviso = "Aprovações e eventos estão indisponíveis no momento. Os posts aparecem normalmente.";
+    else if (Store.authErro && !Store.user) aviso = `O link de acesso não funcionou (${esc(Store.authErro)}). Clique em Entrar e peça um link novo; ele vale por pouco tempo e só uma vez.`;
     else if (Store.user && !Store.user.permitido) aviso = `Você entrou como ${esc(Store.user.email)}, mas este e-mail não tem permissão para aprovar nem criar eventos.`;
 
     // grade
