@@ -37,7 +37,7 @@
 
   /* ---------- dados compartilhados (Supabase, ou memória no modo demonstração) ---------- */
   const Store = {
-    mode: "off", erro: "", user: null, aprov: [], eventos: [], sols: [], edicoes: [], vinculos: [], client: null,
+    mode: "off", erro: "", user: null, aprov: [], eventos: [], sols: [], edicoes: [], vinculos: [], anexos: [], client: null,
 
     async init() {
       const q = new URLSearchParams(location.search);
@@ -86,7 +86,7 @@
     async refresh() {
       if (this.mode === "demo") return;
       // sem acesso o banco recusa a leitura (só e-mails permitidos leem): nada a buscar
-      if (!(this.user && this.user.permitido)) { this.aprov = []; this.eventos = []; this.sols = []; this.edicoes = []; this.vinculos = []; return; }
+      if (!(this.user && this.user.permitido)) { this.aprov = []; this.eventos = []; this.sols = []; this.edicoes = []; this.vinculos = []; this.anexos = []; return; }
       const [a, e] = await Promise.all([
         this.client.from("aprovacoes").select("*").order("criado_em", { ascending: false }),
         this.client.from("eventos").select("*").order("data", { ascending: true })
@@ -104,6 +104,8 @@
         this.edicoes = ed.error ? [] : ed.data || [];
         const vi = await this.client.from("vinculos_demandas").select("*");
         this.vinculos = vi.error ? [] : vi.data || [];
+        const ax = await this.client.from("anexos").select("*").order("criado_em", { ascending: true });
+        this.anexos = ax.error ? [] : ax.data || [];
       }
     },
 
@@ -126,6 +128,35 @@
         return;
       }
       const { error } = await this.client.rpc("decide_solicitacao", { sol: id, decisao, data_pub: dataPub || null });
+      if (error) throw error;
+      await this.refresh();
+    },
+
+    // arquivos dos posts e eventos (espaço privado "anexos" do Supabase)
+    async urlsAnexos(lista) {
+      if (this.mode === "demo") return Object.fromEntries(lista.map(a => [a.caminho, a._url]));
+      const { data, error } = await this.client.storage.from("anexos").createSignedUrls(lista.map(a => a.caminho), 3600);
+      if (error) throw error;
+      return Object.fromEntries((data || []).map(d => [d.path, d.signedUrl]));
+    },
+    async subirAnexo(tipo, alvo, file) {
+      const ext = ((file.name.match(/\.[A-Za-z0-9]+$/) || [""])[0]).toLowerCase();
+      const caminho = `${tipo}/${slug(alvo)}/${Date.now()}-${slug(file.name.replace(/\.[^.]+$/, "")).slice(0, 60)}${ext}`;
+      const row = { tipo, alvo: String(alvo), caminho, nome: file.name, mime: file.type, tamanho: file.size };
+      if (this.mode === "demo") {
+        this.anexos.push(Object.assign({ id: "x" + Date.now() + Math.random(), _url: URL.createObjectURL(file), criado_em: new Date().toISOString() }, row));
+        return;
+      }
+      const up = await this.client.storage.from("anexos").upload(caminho, file, { contentType: file.type, upsert: false });
+      if (up.error) throw up.error;
+      const { error } = await this.client.from("anexos").insert(row);
+      if (error) { await this.client.storage.from("anexos").remove([caminho]); throw error; }
+    },
+    async apagarAnexo(a) {
+      if (this.mode === "demo") { this.anexos = this.anexos.filter(x => x.id !== a.id); return; }
+      const rm = await this.client.storage.from("anexos").remove([a.caminho]);
+      if (rm.error) throw rm.error;
+      const { error } = await this.client.from("anexos").delete().eq("id", a.id);
       if (error) throw error;
       await this.refresh();
     },
@@ -237,7 +268,8 @@
   // post movido pelo site (prazo da demanda ligada mudou): aparece já no dia novo, até a rotina mover no cronograma
   const chavePost = p => `post:${p.conta}|${p.data}|${p.id}|${p.tema}`;
   const movidoPara = p => { const k = chavePost(p), l = Store.edicoes.filter(e => e.campo === "mover_post" && e.demanda === k); return l.length ? l[l.length - 1].valor : null; };
-  const todosPosts = () => Cal.posts.concat(provisorios()).map(p => {
+  const excluidoPost = p => Store.edicoes.some(e => e.campo === "excluir_post" && e.demanda === chavePost(p));
+  const todosPosts = () => Cal.posts.concat(provisorios()).filter(p => !excluidoPost(p)).map(p => {
     const n = movidoPara(p);
     return Object.assign({}, p, { base: { data: p.data, id: p.id } }, n ? { data: n } : {});
   });
@@ -263,12 +295,53 @@
   const ctag = (conta, nome) => `<span class="ctag c-${esc(conta)}">${esc(nome || conta)}</span>`;
   const addBtn = d => Store.mode === "off" ? "" :
     `<button type="button" class="cd-add" data-cal-add="${d}" aria-label="Adicionar evento em ${extenso(d)}" title="Adicionar evento">+</button>`;
-  const evChip = e => `<button type="button" class="evchip" data-cal-ev="${esc(e.id)}"><span aria-hidden="true">${TIPOS[e.tipo] || "📌"}</span><span class="evchip-t">${esc(e.titulo)}</span></button>`;
+  const evChip = e => `<button type="button" class="evchip" data-cal-ev="${esc(e.id)}"><span aria-hidden="true">${TIPOS[e.tipo] || "📌"}</span><span class="evchip-t">${esc(e.titulo)}</span>${anexosDe("evento", e.id).length ? `<span aria-label="tem arquivos">📎</span>` : ""}</button>`;
+  // ---------- arquivos ----------
+  const ANX_TIPOS = ["image/png", "image/jpeg", "image/webp", "image/gif", "video/mp4", "video/quicktime", "video/webm", "application/pdf"];
+  const anexosDe = (tipo, alvo) => Store.anexos.filter(a => a.tipo === tipo && String(a.alvo) === String(alvo));
+  function htmlAnexos(tipo, alvo) {
+    const n = anexosDe(tipo, alvo).length, g = !!(Store.user && Store.user.gestor);
+    if (!n && !g) return "";
+    return `<section class="anx" data-anx data-anx-tipo="${tipo}" data-anx-alvo="${esc(alvo)}" aria-label="Arquivos"><h4>Arquivos${n ? ` <span class="muted">${n}</span>` : ""}</h4>
+      <div class="anx-l" data-anx-l>${n ? `<p class="muted small">Carregando…</p>` : `<p class="muted small">Nenhum arquivo ainda.</p>`}</div>
+      ${g ? `<label class="btn-sec anx-add">Adicionar arquivos<input type="file" multiple accept="image/*,video/*,application/pdf" data-anx-input></label>
+        <p class="form-msg" data-anx-msg role="status"></p>` : ""}</section>`;
+  }
+  async function preencheAnexos() {
+    const sec = Cal.dlg && Cal.dlg.querySelector("[data-anx]");
+    if (!sec) return;
+    const lista = anexosDe(sec.dataset.anxTipo, sec.dataset.anxAlvo), box = sec.querySelector("[data-anx-l]");
+    if (!lista.length) return;
+    let urls;
+    try { urls = await Store.urlsAnexos(lista); } catch (e) { box.innerHTML = `<p class="muted small">Não foi possível abrir os arquivos agora.</p>`; return; }
+    const g = !!(Store.user && Store.user.gestor);
+    box.innerHTML = lista.map(a => {
+      const u = esc(urls[a.caminho] || ""), nome = esc(a.nome);
+      const corpo = a.mime.startsWith("image/") ? `<a href="${u}" target="_blank" rel="noopener" class="anx-img" title="Abrir ${nome}"><img src="${u}" alt="${nome}" loading="lazy"></a>`
+        : a.mime.startsWith("video/") ? `<video src="${u}" controls preload="metadata" playsinline class="anx-vid" aria-label="${nome}"></video>`
+        : `<a href="${u}" target="_blank" rel="noopener" class="anx-pdf"><span aria-hidden="true">📄</span><span>${nome}</span></a>`;
+      return `<figure class="anx-i">${corpo}${g ? `<button type="button" class="anx-x" data-anx-del="${esc(a.id)}" aria-label="Apagar ${nome}" title="Apagar">✕</button>` : ""}</figure>`;
+    }).join("");
+  }
+  async function subirArquivos(inp) {
+    const sec = inp.closest("[data-anx]"), msg = sec.querySelector("[data-anx-msg]"), files = [...inp.files];
+    const ruins = files.filter(f => !ANX_TIPOS.includes(f.type) || f.size > 50 * 1024 * 1024), bons = files.filter(f => !ruins.includes(f));
+    const aviso = ruins.length ? `Não dá para subir ${ruins.map(f => f.name).join(", ")}: só imagem, vídeo ou PDF de até 50 MB.` : "";
+    if (!bons.length) { msg.textContent = aviso; inp.value = ""; return; }
+    inp.disabled = true;
+    try {
+      for (let i = 0; i < bons.length; i++) { msg.textContent = `Enviando ${i + 1} de ${bons.length}…`; await Store.subirAnexo(sec.dataset.anxTipo, sec.dataset.anxAlvo, bons[i]); }
+      if (Store.mode !== "demo") await Store.refresh();
+      notify();
+      const m2 = Cal.dlg && Cal.dlg.querySelector("[data-anx-msg]");
+      if (m2) m2.textContent = aviso;
+    } catch (e) { msg.textContent = "Não foi possível enviar: " + (e.message || e); inp.disabled = false; }
+  }
   function cardPost(p) {
     return `<button type="button" class="pcard c-${p.conta}" data-cal-post="${esc(p.id)}">
       <span class="pc-top"><span class="pc-conta c-${esc(p.conta)}">${esc(p.conta)}</span>${p.formato ? ` · ${esc(p.formato)}` : ""}</span>
       <span class="pc-tema">${esc(p.tema)}</span>
-      <span class="pc-bot">${stPill(p.status)}${p.provisorio ? `<span class="selo s-wait">Entra no cronograma</span>` : selo(Store.decisao(p.id))}</span></button>`;
+      <span class="pc-bot">${stPill(p.status)}${p.provisorio ? `<span class="selo s-wait">Entra no cronograma</span>` : selo(Store.decisao(p.id))}${(n => n ? `<span class="selo s-anx" title="${n} ${n > 1 ? "arquivos" : "arquivo"}">📎 ${n}</span>` : "")(anexosDe("post", (p.base || p).id).length)}</span></button>`;
   }
   // aniversários (planilha do Drive): "MM-DD" vira a data deste mês; 29/02 cai em 28/02 fora do ano bissexto
   const bissexto = y => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -391,7 +464,9 @@
       <h3 class="dlg-t" id="dlg-titulo">${esc(p.tema)}</h3>
       <div class="dlg-tags"><span class="pc-fmt">${esc(p.formato)}</span>${stPill(p.status)}</div>
       <dl class="dlg-dl">${campo("Ideia do post", p.ideia)}${campo("Gancho (1ª frase)", p.gancho)}${campo(p.conta === "Glass" ? "Vinho que aparece" : "Rótulo ou vinho", p.rotulo)}${campo("CTA", p.cta)}</dl>
+      ${htmlAnexos("post", (p.base || p).id)}
       <section class="apr" aria-label="Aprovação"><h4>Aprovação ${p.provisorio ? "" : selo(dec)}</h4>${apr}</section>
+      ${Store.user && Store.user.gestor ? `<div class="row post-del"><button type="button" class="btn-del" data-post-excluir>Excluir post</button></div>` : ""}
       <div class="dlg-nav">
         <button type="button" class="btn-sec" data-nav="${ant}" ${ant ? "" : "disabled"}>‹ Anterior</button>
         <span class="muted">${i + 1} de ${lista.length}</span>
@@ -406,6 +481,7 @@
       <div class="dlg-tags"><span class="pc-fmt">${esc(e.tipo)}</span>${ctag(e.conta, CONTAS_EV[e.conta])}</div>
       ${e.descricao ? `<p class="ev-desc">${esc(e.descricao)}</p>` : ""}
       <p class="muted small">Criado por ${esc(e.criado_por || "")}${e.criado_em ? " em " + quando(e.criado_em) : ""}</p>
+      ${htmlAnexos("evento", e.id)}
       ${pode ? `<div class="row"><button type="button" class="btn-pri" data-ev-edit="${esc(e.id)}">Editar</button><button type="button" class="btn-del" data-ev-del="${esc(e.id)}">Apagar</button></div>`
         : !Store.user ? `<p class="apr-login"><button type="button" class="link" data-cal-login>Entre para editar</button></p>` : ""}`;
   }
@@ -570,6 +646,8 @@
     return [{ linha: 0, demanda: chavePost(Object.assign({}, p, p.base)), campo: "mover_post", valor: nova }];
   }
   const dm = d => `${String(d).slice(8, 10)}/${String(d).slice(5, 7)}`;
+  // demandas ligadas a um post ou evento que foi excluído: excluídas junto (aparece na hora; a rotina apaga na planilha)
+  const excluiLigadas = vs => vs.map(v => ({ linha: v.linha || 0, demanda: v.demanda, campo: "excluir", valor: "sim" }));
   function opcoesCalendario() {
     const desde = addMes(hojeSP().slice(0, 7), -1) + "-01";
     const posts = todosPosts().filter(p => p.data >= desde).sort((a, b) => a.data < b.data ? -1 : a.data > b.data ? 1 : 0)
@@ -610,6 +688,7 @@
       Cal.dlg.addEventListener("change", ev => {
         const f = ev.target.form;
         if (f && f.hasAttribute("data-dem-form") && (ev.target.name === "tipo" || ev.target.name === "marca")) ajustaFormDemanda(f);
+        if (ev.target.matches && ev.target.matches("[data-anx-input]")) subirArquivos(ev.target);
       });
       Cal.dlg.addEventListener("close", () => { Cal.aberto = null; if (Cal.ultimoFoco && document.contains(Cal.ultimoFoco)) Cal.ultimoFoco.focus(); });
     }
@@ -638,6 +717,7 @@
     else if (a.tipo === "demanda-ok") h = htmlDemandaOk(a.extra || {});
     else if (a.tipo === "sol") { const s = Store.sols.find(x => String(x.id) === String(a.id)); if (!s) return Cal.dlg.close(); h = htmlSol(s); }
     Cal.dlg.innerHTML = `<div class="dlg-in">${h}</div>`;
+    preencheAnexos();
   }
 
   function erroMsg(e) {
@@ -654,6 +734,25 @@
     if (b.hasAttribute("data-cal-login")) { abre("login"); return; }
     if (b.dataset.nav) { abre("post", b.dataset.nav); return; }
     if (b.dataset.verSol) { abre("sol", b.dataset.verSol); return; }
+    if (b.dataset.anxDel) {
+      const a = Store.anexos.find(x => String(x.id) === b.dataset.anxDel);
+      if (a && confirm(`Apagar o arquivo "${a.nome}"?`)) { try { await Store.apagarAnexo(a); notify(); } catch (e) { alert(erroMsg(e)); } }
+      return;
+    }
+    if (b.hasAttribute("data-post-excluir")) {
+      const p = todosPosts().find(x => x.id === Cal.aberto.id);
+      if (!p) return;
+      const ligados = p.provisorio ? [] : Store.vinculos.filter(v => v.tipo === "post" && v.conta === p.conta && String(v.data).slice(0, 10) === p.data && v.tema === p.tema);
+      const n = p.provisorio ? 1 : ligados.length;
+      if (!confirm(`Excluir o post "${p.tema}" de ${dm(p.data)}?${n ? ` A demanda ligada a ele também é excluída.` : ""} Some agora e sai do cronograma na próxima atualização.`)) return;
+      try {
+        const eds = p.provisorio ? [{ linha: 0, demanda: "sol:" + p.sol, campo: "excluir", valor: "sim" }]
+          : [{ linha: 0, demanda: chavePost(Object.assign({}, p, p.base)), campo: "excluir_post", valor: "sim" }].concat(excluiLigadas(ligados));
+        for (const v of ligados) await Store.delVinculo(v.id);
+        await Store.addEdicoes(eds); Cal.dlg.close(); notify();
+      } catch (e) { alert(erroMsg(e)); }
+      return;
+    }
     const r = Cal.aberto && Cal.aberto.extra;
     if (b.hasAttribute("data-dem-editar")) { abre("dem-editar", null, r); return; }
     if (b.hasAttribute("data-dem-feito")) {
@@ -681,8 +780,12 @@
     if (b.dataset.evEdit) { const e = Store.eventos.find(x => String(x.id) === b.dataset.evEdit); abre("form", null, Object.assign({}, e)); return; }
     if (b.dataset.evDel) {
       const e = Store.eventos.find(x => String(x.id) === b.dataset.evDel);
-      if (!confirm(`Apagar o evento "${e ? e.titulo : ""}"? Isso não pode ser desfeito.`)) return;
-      try { await Store.delEvento(b.dataset.evDel); Cal.dlg.close(); notify(); }
+      const ligados = Store.user && Store.user.gestor ? Store.vinculos.filter(v => v.tipo === "evento" && String(v.evento_id) === b.dataset.evDel) : [];
+      if (!confirm(`Apagar o evento "${e ? e.titulo : ""}"?${ligados.length ? " A demanda ligada a ele também é excluída." : ""} Isso não pode ser desfeito.`)) return;
+      try {
+        if (ligados.length) { for (const v of ligados) await Store.delVinculo(v.id); await Store.addEdicoes(excluiLigadas(ligados)); }
+        await Store.delEvento(b.dataset.evDel); Cal.dlg.close(); notify();
+      }
       catch (err) { alert(erroMsg(err)); }
     }
   }

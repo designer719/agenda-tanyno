@@ -287,6 +287,20 @@ select.ed:focus-visible,input.ed:focus-visible,.dem-b:focus-visible,.chk-b:focus
 .form-msg{font-size:13px;color:var(--ink-2);margin:10px 0 0}
 .form-msg:empty{display:none}
 .ev-ic{font-size:22px}
+.anx{border-top:1px solid var(--line);padding-top:16px;margin-top:16px}
+.anx h4{margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);display:flex;gap:8px}
+.anx-l{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory}
+.anx-i{position:relative;margin:0;flex:none;scroll-snap-align:start}
+.anx-img img{display:block;height:180px;width:auto;max-width:280px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:var(--soft)}
+.anx-vid{display:block;height:220px;max-width:300px;border-radius:10px;background:#111}
+.anx-pdf{display:flex;align-items:center;gap:8px;height:56px;padding:0 40px 0 14px;border:1px solid var(--line);border-radius:10px;color:var(--ink);font-weight:700;font-size:13px;text-decoration:none;max-width:280px}
+.anx-pdf span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.anx-x{position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;border:0;background:rgba(20,20,20,.72);color:#fff;font:inherit;font-size:12px;cursor:pointer}
+.anx-add{display:inline-flex;align-items:center;position:relative;margin-top:10px;cursor:pointer}
+.anx-add input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.anx-add:focus-within{outline:2px solid var(--ink);outline-offset:2px}
+.s-anx{background:#EEF1F5;color:#3A4A5E}
+.post-del{margin-top:14px;justify-content:flex-end}
 .ev-desc{font-size:15px;margin:0 0 12px;white-space:pre-wrap}
 @media (max-width:719.98px){
   /* menu lateral vira gaveta */
@@ -378,11 +392,13 @@ function obsSol(s){let o=`Pedido pelo site: ${s.tipo}, ${s.marca}. Briefing comp
 const EDCOL={feito:0,demanda:1,prioridade:2,prazo:3,status:4,observacoes:6};
 // a aceita que ainda não está na planilha também é editável: linha 0 e orig "sol:<id>"
 function demandasTodas(){const eds=Calendario.edicoes();
-  const daPlanilha=D.demandas.map(r0=>{const r=r0.slice(0,7);r.linha=r0[7];r.orig=r0[1];return r});
+  const sols=Calendario.solicitacoes();
+  const daPlanilha=D.demandas.map(r0=>{const r=r0.slice(0,7);r.linha=r0[7];r.orig=r0[1];
+    const s=sols.find(x=>x.titulo===r0[1]&&x.criado_por===r0[5]);if(s)r.solKey="sol:"+s.id;return r});
   const provisorias=Calendario.solicitacoes().filter(s=>s.situacao==="aceita"&&!s.na_planilha&&!D.demandas.some(r=>r[1]===s.titulo&&r[5]===s.criado_por))
     .map(s=>{const r=[false,s.titulo,s.urgencia||"Média",String(s.prazo).slice(0,10),"A fazer",s.criado_por||"",obsSol(s)];r.sol=s;r.linha=0;r.orig="sol:"+s.id;return r});
   return daPlanilha.concat(provisorias).map(r=>{
-    for(const e of eds)if(e.linha===r.linha&&e.demanda===r.orig){if(e.campo==="excluir")r.excluida=true;else r[EDCOL[e.campo]]=e.campo==="feito"?e.valor==="true":e.valor}
+    for(const e of eds)if((e.linha===r.linha&&e.demanda===r.orig)||(r.solKey&&e.demanda===r.solKey&&e.campo==="excluir")){if(e.campo==="excluir")r.excluida=true;else r[EDCOL[e.campo]]=e.campo==="feito"?e.valor==="true":e.valor}
     return r}).filter(r=>!r.excluida)}
 let LINHAS=[];   // linhas desenhadas na tabela (os botões apontam pelo índice)
 const EDITANDO=new Set();   // linhas com o lápis ligado (chave: linha|nome original)
