@@ -264,6 +264,12 @@ dialog.cal-dlg::backdrop{background:rgba(20,20,20,.45)}
 .dem-b{font:inherit;cursor:pointer;border:0;background:none;padding:0;text-align:left;font-weight:700;color:var(--ink)}
 .dem-b:hover{text-decoration:underline;text-underline-offset:3px}
 tr.done .dem-b{color:#B8B8B8;text-decoration:line-through;text-decoration-color:#C8C8C8}
+.dem-l{display:flex;align-items:flex-start;gap:8px}
+.lapis{font:inherit;cursor:pointer;flex:none;display:inline-grid;place-items:center;width:28px;height:28px;border:1px solid #D6D6D6;border-radius:8px;background:var(--card);color:var(--ink-2);padding:0;font-size:11px;font-weight:700}
+.lapis svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.lapis:hover{border-color:var(--ink-2);color:var(--ink)}
+.lapis.on{width:auto;padding:0 10px;background:var(--ink);border-color:var(--ink);color:#fff}
+.lapis:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .chk-b{font:inherit;cursor:pointer;border:0;background:none;padding:4px;border-radius:8px;line-height:0}
 .chk-b:hover .check{box-shadow:inset 0 0 0 1.5px var(--wine)}
 select.ed,input.ed{font:inherit;font-size:13px;border:1px solid #D6D6D6;border-radius:8px;padding:5px 8px;background:#fff;color:var(--ink);max-width:100%}
@@ -364,13 +370,18 @@ function obsSol(s){let o=`Pedido pelo site: ${s.tipo}, ${s.marca}. Briefing comp
   if(s.data_publicacao&&CRONO_SOL[s.marca]&&POST_SOL.includes(s.tipo)){const d=String(s.data_publicacao).slice(0,10);o+=` Publicação em ${d.slice(8,10)}/${d.slice(5,7)}/${d.slice(0,4)} (${CRONO_SOL[s.marca]}).`}return o}
 // edições do site ainda não aplicadas na planilha aparecem por cima (a mais nova vale); r.linha e r.orig identificam a linha
 const EDCOL={feito:0,demanda:1,prioridade:2,prazo:3,status:4,observacoes:6};
+// a aceita que ainda não está na planilha também é editável: linha 0 e orig "sol:<id>"
 function demandasTodas(){const eds=Calendario.edicoes();
-  const base=D.demandas.map(r0=>{const r=r0.slice(0,7);r.linha=r0[7];r.orig=r0[1];
+  const daPlanilha=D.demandas.map(r0=>{const r=r0.slice(0,7);r.linha=r0[7];r.orig=r0[1];return r});
+  const provisorias=Calendario.solicitacoes().filter(s=>s.situacao==="aceita"&&!s.na_planilha&&!D.demandas.some(r=>r[1]===s.titulo&&r[5]===s.criado_por))
+    .map(s=>{const r=[false,s.titulo,s.urgencia||"Média",String(s.prazo).slice(0,10),"A fazer",s.criado_por||"",obsSol(s)];r.sol=s;r.linha=0;r.orig="sol:"+s.id;return r});
+  return daPlanilha.concat(provisorias).map(r=>{
     for(const e of eds)if(e.linha===r.linha&&e.demanda===r.orig){if(e.campo==="excluir")r.excluida=true;else r[EDCOL[e.campo]]=e.campo==="feito"?e.valor==="true":e.valor}
-    return r}).filter(r=>!r.excluida);
-  return base.concat(Calendario.solicitacoes().filter(s=>s.situacao==="aceita"&&!s.na_planilha&&!D.demandas.some(r=>r[1]===s.titulo&&r[5]===s.criado_por))
-  .map(s=>{const r=[false,s.titulo,s.urgencia||"Média",String(s.prazo).slice(0,10),"A fazer",s.criado_por||"",obsSol(s)];r.sol=s;return r}))}
+    return r}).filter(r=>!r.excluida)}
 let LINHAS=[];   // linhas desenhadas na tabela (os botões apontam pelo índice)
+const EDITANDO=new Set();   // linhas com o lápis ligado (chave: linha|nome original)
+const chaveDem=r=>r.linha+"|"+r.orig;
+const LAPIS='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg>';
 const sel=(campo,i,lista,v,vazio)=>`<select class="ed" data-ed="${campo}" data-i="${i}" aria-label="${campo==="prioridade"?"Prioridade":"Status"}">${!v&&vazio?`<option value="" selected disabled>${vazio}</option>`:""}${v&&!lista.includes(v)?`<option selected>${esc(v)}</option>`:""}${lista.map(x=>`<option${x===v?" selected":""}>${esc(x)}</option>`).join("")}</select>`;
 const R={
  demandas(){
@@ -396,12 +407,14 @@ const R={
    card(["Feito","Demanda","Prioridade","Prazo","Status","Observações"],(LINHAS=rows).map((r,i)=>{
      r.sol=solDe(r);
      const done=r[0]||r[4]==="Entregue"; const d=r[3]?r[3].slice(0,10):""; const lt=!done&&d&&d<t; const hj=!done&&d===t;
-     const ed=gestor&&r.linha;   // só linhas que já estão na planilha, e só para quem decide
-     const feito=ed?`<button type="button" class="chk-b" data-acoes="${i}" aria-label="Concluir, editar ou excluir: ${esc(r[1])}">${box(r[0])}</button>`:box(done);
+     const pode=gestor&&r.linha!==undefined;   // só para quem decide (a provisória tem linha 0)
+     const ed=pode&&EDITANDO.has(chaveDem(r));   // campos viram editáveis só com o lápis ligado
+     const lapis=pode?`<button type="button" class="lapis${ed?" on":""}" data-lapis="${i}" aria-pressed="${ed}" aria-label="${ed?"Terminar a edição":"Editar prioridade, prazo e status"}: ${esc(r[1])}" title="${ed?"Terminar a edição":"Editar prioridade, prazo e status"}">${ed?"OK":LAPIS}</button>`:"";
+     const feito=pode?`<button type="button" class="chk-b" data-acoes="${i}" aria-label="Concluir, editar ou excluir: ${esc(r[1])}">${box(r[0])}</button>`:box(done);
      const pri=ed?sel("prioridade",i,["Alta","Média","Baixa"],r[2],"Definir"):pill("p-"+r[2],r[2]);
      const prazo=ed?`<input type="date" class="ed" data-ed="prazo" data-i="${i}" value="${esc(d)}" aria-label="Prazo">`:fmt(r[3]);
      const st=ed?sel("status",i,["A fazer","Em andamento","Aprovação","Aguardando","Entregue"],r[4]||"A fazer"):pill(sk(done?"Feito":r[4]),done?"Feito":r[4]);
-     return `<tr class="${done?"done":""} ${lt?"late":""} ${hj?"today":""}"><td class="c" data-l="Feito">${feito}</td><td class="main" data-l="Demanda"><button type="button" class="dem-b" data-ver="${i}">${esc(r[1])}</button></td><td data-l="Prioridade">${pri}</td><td class="date" data-l="Prazo">${prazo}${lt?`<span class="when">atrasada</span>`:hj?`<span class="when">hoje</span>`:""}</td><td data-l="Status">${st}</td><td class="note" data-l="Observações">${esc(r[6])}</td></tr>`}).join(""))},
+     return `<tr class="${done?"done":""} ${lt?"late":""} ${hj?"today":""}"><td class="c" data-l="Feito">${feito}</td><td class="main" data-l="Demanda"><span class="dem-l"><button type="button" class="dem-b" data-ver="${i}">${esc(r[1])}</button>${lapis}</span></td><td data-l="Prioridade">${pri}</td><td class="date" data-l="Prazo">${prazo}${lt?`<span class="when">atrasada</span>`:hj?`<span class="when">hoje</span>`:""}</td><td data-l="Status">${st}</td><td class="note" data-l="Observações">${esc(r[6])}</td></tr>`}).join(""))},
  digital(){return barra("Digital")+`<p class="lead">Tarefas recorrentes de RD Station, Meta Ads e canais digitais.</p>`+
    card(["Feito","Tarefa","Frequência","Quando","Observações"],D.digital.map(r=>`<tr class="${r[0]?"done":""}"><td class="c" data-l="Feito">${box(r[0])}</td><td class="main" data-l="Tarefa">${esc(r[1])}</td><td data-l="Frequência"><span class="tag">${esc(r[2])}</span></td><td data-l="Quando">${esc(r[3])}</td><td class="note" data-l="Observações">${esc(r[4])}</td></tr>`).join(""))},
  site(){let g="";return barra("Rotina mensal do site")+`<p class="lead">Até dia 20 a Talita decide · entre dia 20 e dia 1 o Rodrigo produz · dia 1 o Rodrigo publica.</p>`+
@@ -467,6 +480,8 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&document.body.class
 document.getElementById("view").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
   if(b.hasAttribute("data-nova-demanda"))Calendario.novaDemanda();else if(b.dataset.sol)Calendario.verSolicitacao(b.dataset.sol);
   else if(b.dataset.aceitar)Calendario.aceitarDemanda(b.dataset.aceitar);else if(b.dataset.recusar)Calendario.recusarDemanda(b.dataset.recusar);
+  else if(b.dataset.lapis){const r=LINHAS[+b.dataset.lapis],k=chaveDem(r),i=b.dataset.lapis;EDITANDO.has(k)?EDITANDO.delete(k):EDITANDO.add(k);show("demandas");
+    const f=document.querySelector(`[data-lapis="${i}"]`);if(f)f.focus()}
   else if(b.dataset.ver)Calendario.verDemanda(LINHAS[+b.dataset.ver]);else if(b.dataset.acoes)Calendario.acoesDemanda(LINHAS[+b.dataset.acoes])});
 document.getElementById("view").addEventListener("change",e=>{const c=e.target.closest("[data-ed]");if(!c||!c.value)return;
   const r=LINHAS[+c.dataset.i];if(r)Calendario.editaCampo(r,c.dataset.ed,c.value)});

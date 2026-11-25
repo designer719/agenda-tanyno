@@ -206,10 +206,12 @@
   const clampMes = ym => ym < MES_MIN ? MES_MIN : ym > mesMax() ? mesMax() : ym;
   const filtraConta = c => Cal.conta === "Todas" || c === Cal.conta;
   // publicação aceita pelo site que a rotina ainda não pôs no cronograma: aparece já, como provisória, no dia escolhido
+  // edição mais nova de um campo da provisória (feita na tabela de Demandas)
+  const edSol = (id, campo) => { const l = Store.edicoes.filter(e => e.demanda === "sol:" + id && e.campo === campo); return l.length ? l[l.length - 1].valor : null; };
   const provisorios = () => Store.sols
-    .filter(s => s.situacao === "aceita" && !s.na_planilha && s.data_publicacao && ehPost(s))
+    .filter(s => s.situacao === "aceita" && !s.na_planilha && s.data_publicacao && ehPost(s) && !edSol(s.id, "excluir"))
     .map(s => ({ id: "sol-" + s.id, sol: s.id, provisorio: true, conta: s.marca === "Tanyno" ? "Oficial" : "Glass",
-      data: String(s.data_publicacao).slice(0, 10), formato: FORMATO[s.tipo], tema: s.titulo, ideia: s.briefing,
+      data: String(s.data_publicacao).slice(0, 10), formato: FORMATO[s.tipo], tema: edSol(s.id, "demanda") || s.titulo, ideia: s.briefing,
       rotulo: s.produtos || "", gancho: "", cta: "", status: "Produzindo" }))
     .filter(v => !Cal.posts.some(p => p.conta === v.conta && p.data === v.data && p.tema === v.tema));
   const todosPosts = () => Cal.posts.concat(provisorios());
@@ -486,7 +488,7 @@
         ${campo("Tipo de peça", s.tipo)}${campo("Marca", s.marca)}${campo("Urgência", s.urgencia)}${s.data_publicacao ? campo("Data de publicação", dmyBR(String(s.data_publicacao).slice(0, 10))) : ""}
         ${SOL_CAMPOS.map(([k, rot]) => s[k] ? `<div class="dl-i"><dt>${rot}</dt><dd class="pre">${k === "links" ? comLinks(s[k]) : esc(s[k])}</dd></div>` : "").join("")}
         </dl><p class="muted small">Pedido por ${esc(s.criado_por || "")}${s.criado_em ? " em " + quando(s.criado_em) : ""}</p></section>` : ""}
-      <div class="row">${gestor && r.linha ? `<button type="button" class="btn-pri" data-dem-editar>Editar</button>` : ""}<button type="button" class="btn-sec" data-dlg-close>Fechar</button></div>`;
+      <div class="row">${gestor && r.linha !== undefined ? `<button type="button" class="btn-pri" data-dem-editar>Editar</button>` : ""}<button type="button" class="btn-sec" data-dlg-close>Fechar</button></div>`;
   }
   function htmlDemAcoes(r) {
     return `<div class="dlg-h"><h3 class="dlg-t" id="dlg-titulo">${esc(r[1])}</h3>${fechar}</div>
