@@ -10,7 +10,7 @@
   const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
   const DIAS_CURTOS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
   const TIPOS = { "Data comemorativa": "🎉", "Lançamento": "🍷", "Evento Tanyno": "⭐", "Reunião": "👥", "Post extra": "➕", "Outro": "📌" };
-  const CONTAS_EV = { Ambas: "Ambas as contas", Oficial: "Tanyno Oficial", Glass: "Tanyno Glass", Interno: "Interno" };
+  const CONTAS_EV = { Ambas: "Ambas as contas", Oficial: "Tanyno Oficial", Glass: "Tanyno Glass", Mililitros: "Mililitros", Interno: "Interno" };
   const CONTA_NOME = { Oficial: "Tanyno Oficial", Glass: "Tanyno Glass" };
   // listas iguais às do SQL (tabela solicitacoes)
   const SOL_TIPOS = ["Card feed", "Stories", "Reels", "Carrossel", "Catálogo", "Site", "Material comercial", "Vídeo", "Outro"];
@@ -216,9 +216,20 @@
 
     async saveEvento(ev) {
       const campos = { data: ev.data, titulo: ev.titulo, tipo: ev.tipo, conta: ev.conta, descricao: ev.descricao };
+      if (!ev.id && ev.demanda) campos.demanda = ev.demanda;     // nasceu de uma demanda aceita
       if (this.mode === "demo") {
         if (ev.id) Object.assign(this.eventos.find(x => x.id === ev.id), campos);
-        else this.eventos.push(Object.assign({ id: "e" + Date.now(), criado_por: this.user.nome, criado_em: new Date().toISOString() }, campos));
+        else {
+          const id = "e" + Date.now() + Math.floor(Math.random() * 1000);
+          this.eventos.push(Object.assign({ id, criado_por: this.user.nome, criado_em: new Date().toISOString() }, campos));
+          if (ev.demanda) this.vinculos.push({ id: "v" + id, linha: 0, demanda: ev.demanda, tipo: "evento", evento_id: id, publicacao: true });
+          else {                                                   // como o gatilho do banco: demanda aceita ligada ao evento
+            const sid = "s" + id, marca = { Glass: "Tanyno Glass", Interno: "Interno", Mililitros: "Mililitros" }[ev.conta] || "Tanyno";
+            this.sols.push({ id: sid, titulo: ev.titulo, tipo: "Outro", marca, prazo: ev.data, urgencia: "Média", briefing: `Evento do calendário (${ev.tipo}).`,
+              situacao: "aceita", na_planilha: false, criado_por: this.user.nome, criado_em: new Date().toISOString(), evento_id: id });
+            this.vinculos.push({ id: "v" + id, linha: 0, demanda: "sol:" + sid, tipo: "evento", evento_id: id, publicacao: false });
+          }
+        }
         this.eventos.sort((a, b) => a.data < b.data ? -1 : a.data > b.data ? 1 : 0);
         return;
       }
@@ -281,7 +292,7 @@
   const postsMes = () => todosPosts().filter(p => p.data.slice(0, 7) === Cal.mes && filtraConta(p.conta))
     .sort((a, b) => a.data < b.data ? -1 : a.data > b.data ? 1 : 0);
   const eventosMes = () => Store.eventos.filter(e => String(e.data).slice(0, 7) === Cal.mes &&
-    (Cal.conta === "Todas" || e.conta === Cal.conta || e.conta === "Ambas" || e.conta === "Interno"));
+    (Cal.conta === "Todas" || e.conta === Cal.conta || e.conta === "Ambas" || e.conta === "Interno" || e.conta === "Mililitros"));
 
   function pendentes() {
     if (Store.mode === "off") return null;
@@ -590,6 +601,7 @@
         <label class="fl"><span data-prazo-rot>Prazo desejado *</span><input type="date" name="prazo" required min="${hojeSP()}"></label>
         <label class="fl">Urgência<select name="urgencia">${opts(SOL_URG, "Média")}</select></label>
       </div>
+      <div class="row2" data-pub hidden><label class="fl">Data de publicação *<input type="date" name="data_publicacao" min="${hojeSP()}"></label></div>
       ${area("objetivo", "Objetivo e público", "Para que serve e para quem")}
       ${area("briefing", "Briefing *", "O que precisa ser feito, com todos os detalhes", true)}
       ${area("texto_aprovado", "Texto aprovado", "Entra palavra por palavra")}
@@ -601,10 +613,12 @@
       <p class="form-msg" role="status"></p>
     </form>`;
   }
-  // publicação no Instagram (tipo de rede social + Tanyno ou Glass): o mesmo campo vira "Data de publicação" (a data digitada fica)
-  const ehPostForm = f => !!(CRONO[f.elements.marca.value] && FORMATO[f.elements.tipo.value]);
+  // post de rede social (qualquer marca): pede o prazo de entrega e a data de publicação
+  const ehSocialForm = f => !!FORMATO[f.elements.tipo.value];
   function ajustaFormDemanda(f) {
-    f.querySelector("[data-prazo-rot]").textContent = ehPostForm(f) ? "Data de publicação *" : "Prazo desejado *";
+    const soc = ehSocialForm(f);
+    f.querySelector("[data-prazo-rot]").textContent = soc ? "Prazo de entrega *" : "Prazo desejado *";
+    f.querySelector("[data-pub]").hidden = !soc; f.elements.data_publicacao.required = soc;
   }
   const htmlDemandaOk = e => `<div class="dlg-h"><h3 class="dlg-t" id="dlg-titulo">Demanda enviada</h3>${fechar}</div>
       <p class="ev-desc">${esc(e.titulo)}</p>
@@ -617,6 +631,8 @@
   const CRONO = { "Tanyno": "Tanyno Oficial", "Tanyno Glass": "Tanyno Glass" };
   const FORMATO = { "Card feed": "Foto única", "Reels": "Reels", "Carrossel": "Carrossel", "Stories": "Stories" };
   const ehPost = s => !!(CRONO[s.marca] && FORMATO[s.tipo]);
+  const ehPubEvento = s => !!FORMATO[s.tipo] && !CRONO[s.marca];           // ex.: Reels da Mililitros
+  const contaEvento = s => s.marca === "Mililitros" ? "Mililitros" : "Interno";
   function htmlAceitar(s) {
     const hoje = hojeSP(), prazo = String(s.prazo || "").slice(0, 10), pedido = String(s.data_publicacao || "").slice(0, 10) || prazo,
       sug = pedido && pedido >= hoje ? pedido : hoje;
@@ -625,6 +641,8 @@
       <p class="ev-desc"><b>${esc(s.titulo)}</b><br><span class="muted">${esc(s.tipo)} · ${esc(s.marca)} · pedido por ${esc(s.criado_por || "")}</span></p>
       ${ehPost(s) ? `<label class="fl">Data de publicação<input type="date" name="data_pub" required min="${hoje}" value="${sug}"></label>
         <p class="muted small">Entra nas suas demandas e no cronograma ${esc(CRONO[s.marca])} como ${esc(FORMATO[s.tipo])}, na próxima atualização automática.</p>`
+        : ehPubEvento(s) ? `<label class="fl">Data de publicação<input type="date" name="data_pub" required value="${sug}"></label>
+        <p class="muted small">Entra nas suas demandas e vira um evento ${esc(CONTAS_EV[contaEvento(s)])} no calendário nesse dia, ligado à demanda.</p>`
         : `<p class="muted small">Entra nas suas demandas na próxima atualização automática.</p>`}
       <div class="row"><button type="submit" class="btn-pri">Aceitar</button><button type="button" class="btn-sec" data-dlg-close>Cancelar</button></div>
       <p class="form-msg" role="status"></p>
@@ -664,7 +682,8 @@
         <label class="fl">Prazo<input type="date" name="prazo" value="${esc(String(r[3] || "").slice(0, 10))}"></label>
       </div>
       <label class="fl">Status<select name="status">${op(STATUS, r[4] || "A fazer")}</select></label>
-      <label class="fl">No calendário <small>Mudou o prazo, o post ou evento ligado vai para o mesmo dia</small><select name="vinculo">
+      ${(pub => pub ? `<label class="fl">Data de publicação <small>O post ou evento ligado vai para esse dia</small><input type="date" name="data_pub" value="${esc(pub)}"></label>` : "")(dataPubDe(vinculoDe(r)))}
+      <label class="fl">No calendário <small>Evento ligado anda junto com o prazo; post segue a data de publicação</small><select name="vinculo">
         <option value="">Nenhum</option>${(r._op = opcoesCalendario()).map((o, i) => { const v = vinculoDe(r);
           const sel = v && (v.tipo === "evento" ? o.evento_id === v.evento_id : o.tipo === "post" && o.conta === v.conta && o.data === String(v.data).slice(0, 10) && o.tema === v.tema);
           return `<option value="${i}"${sel ? " selected" : ""}>${esc(o.rot)}</option>`; }).join("")}</select></label>
@@ -676,14 +695,26 @@
   const edicao = (r, campo, valor) => ({ linha: r.linha, demanda: r.orig, campo, valor: String(valor) });
   // demanda do site fica ligada pela solicitação; as da planilha pela linha e nome
   const chaveVinc = r => r.sol ? { linha: 0, demanda: "sol:" + r.sol.id } : { linha: r.linha, demanda: r.orig };
-  const vinculoDe = r => r && Store.vinculos.find(v => (r.sol && v.demanda === "sol:" + r.sol.id) || (v.linha === r.linha && v.demanda === r.orig));
+  const vinculoDe = r => r && Store.vinculos.find(v => (r.sol && v.demanda === "sol:" + r.sol.id) || (r.solKey && v.demanda === r.solKey)
+    || (v.linha > 0 && v.demanda === r.orig));
+  const vinculosDe = r => r ? Store.vinculos.filter(v => (r.sol && v.demanda === "sol:" + r.sol.id) || (r.solKey && v.demanda === r.solKey)
+    || (v.linha > 0 && v.demanda === r.orig)) : [];
+  const eventoDe = v => v && v.tipo === "evento" && Store.eventos.find(e => String(e.id) === String(v.evento_id));
+  // data de publicação do que está ligado (post, ou evento de publicação); null se o vínculo segue o prazo
+  const dataPubDe = v => !v ? null : v.tipo === "post" ? ((postDoVinculo(v) || {}).data || null)
+    : v.publicacao ? String((eventoDe(v) || {}).data || "").slice(0, 10) || null : null;
   const postDoVinculo = v => todosPosts().find(x => casaVinc(v, x));
-  // prazo mudou: o post ou evento ligado vai para o mesmo dia
+  // prazo mudou: o evento ligado (que não é de publicação) vai para o mesmo dia. Post e evento de publicação seguem a data de publicação.
   async function moveVinculado(r, nova) {
-    const v = vinculoDe(r);
+    const v = vinculoDe(r), ev = eventoDe(v);
+    if (ev && !v.publicacao && nova && String(ev.data).slice(0, 10) !== nova) await Store.saveEvento(Object.assign({}, ev, { data: nova }));
+    return [];
+  }
+  // data de publicação mudou: o post (cronograma) ou o evento de publicação vai para esse dia
+  async function movePublicacao(v, nova) {
     if (!v || !nova) return [];
     if (v.tipo === "evento") {
-      const ev = Store.eventos.find(e => String(e.id) === String(v.evento_id));
+      const ev = eventoDe(v);
       if (ev && String(ev.data).slice(0, 10) !== nova) await Store.saveEvento(Object.assign({}, ev, { data: nova }));
       return [];
     }
@@ -691,6 +722,10 @@
     if (!p || p.data === nova) return [];
     await Store.updVinculo(v.id, { data: nova });
     return [{ linha: 0, demanda: chavePost(Object.assign({}, p, p.base)), campo: "mover_post", valor: nova }];
+  }
+  // nome da demanda mudou: os eventos ligados mudam de nome junto
+  async function renomeiaEventos(r, nome) {
+    for (const v of vinculosDe(r)) { const ev = eventoDe(v); if (ev && ev.titulo !== nome) await Store.saveEvento(Object.assign({}, ev, { titulo: nome.slice(0, 120) })); }
   }
   const dm = d => `${String(d).slice(8, 10)}/${String(d).slice(5, 7)}`;
   // demandas ligadas a um post ou evento que foi excluído: excluídas junto (aparece na hora; a rotina apaga na planilha)
@@ -716,8 +751,8 @@
       <h3 class="dlg-t" id="dlg-titulo">${esc(s.titulo)}</h3>
       <p class="muted small">Pedido por ${esc(s.criado_por || "")}${s.criado_em ? " em " + quando(s.criado_em) : ""}</p>
       <dl class="dlg-dl">
-        ${s.data_publicacao ? `<div class="dl-i"><dt>Data de publicação</dt><dd>${cap(extenso(String(s.data_publicacao).slice(0, 10)))}</dd></div>`
-          : prazo ? `<div class="dl-i"><dt>Prazo desejado</dt><dd>${cap(extenso(prazo))}</dd></div>` : ""}
+        ${prazo ? `<div class="dl-i"><dt>${s.data_publicacao ? "Prazo de entrega" : "Prazo desejado"}</dt><dd>${cap(extenso(prazo))}</dd></div>` : ""}
+        ${s.data_publicacao ? `<div class="dl-i"><dt>Data de publicação</dt><dd>${cap(extenso(String(s.data_publicacao).slice(0, 10)))}</dd></div>` : ""}
         ${campo("Urgência", s.urgencia)}
         ${SOL_CAMPOS.map(([k, rot]) => s[k] ? `<div class="dl-i"><dt>${rot}</dt><dd class="pre">${k === "links" ? comLinks(s[k]) : esc(s[k])}</dd></div>` : "").join("")}
       </dl>
@@ -816,8 +851,12 @@
       return;
     }
     if (b.hasAttribute("data-dem-excluir")) {
-      if (!confirm(`Excluir a demanda "${r[1]}"? Ela sai do site agora e da planilha na próxima atualização.`)) return;
-      try { await Store.addEdicoes([edicao(r, "excluir", "sim")]); Cal.dlg.close(); notify(); }
+      const evs = vinculosDe(r).filter(v => eventoDe(v));
+      if (!confirm(`Excluir a demanda "${r[1]}"?${evs.length ? " O evento ligado a ela também é apagado." : ""} Ela sai do site agora e da planilha na próxima atualização.`)) return;
+      try {
+        for (const v of evs) { const id = v.evento_id; await Store.delVinculo(v.id); await Store.delEvento(id); }
+        await Store.addEdicoes([edicao(r, "excluir", "sim")]); Cal.dlg.close(); notify();
+      }
       catch (e) { alert(erroMsg(e)); }
       return;
     }
@@ -835,7 +874,7 @@
     if (b.dataset.evEdit) { const e = Store.eventos.find(x => String(x.id) === b.dataset.evEdit); abre("form", null, Object.assign({}, e)); return; }
     if (b.dataset.evDel) {
       const e = Store.eventos.find(x => String(x.id) === b.dataset.evDel);
-      const ligados = Store.user && Store.user.gestor ? Store.vinculos.filter(v => v.tipo === "evento" && String(v.evento_id) === b.dataset.evDel) : [];
+      const ligados = Store.vinculos.filter(v => v.tipo === "evento" && String(v.evento_id) === b.dataset.evDel);
       if (!confirm(`Apagar o evento "${e ? e.titulo : ""}"?${ligados.length ? " A demanda ligada a ele também é excluída." : ""} Isso não pode ser desfeito.`)) return;
       try {
         if (ligados.length) { for (const v of ligados) await Store.delVinculo(v.id); await Store.addEdicoes(excluiLigadas(ligados)); }
@@ -866,7 +905,6 @@
         const eds = Object.keys(novo).map(c => ({ linha: 0, demanda: chave, campo: "post_" + c, valor: novo[c] }));
         if (mudouData) {
           eds.push({ linha: 0, demanda: chave, campo: "mover_post", valor: nova });
-          ligados.forEach(v => eds.push({ linha: v.linha || 0, demanda: v.demanda, campo: "prazo", valor: nova }));
         }
         for (const v of ligados) {
           const up = Object.assign({}, mudouData ? { data: nova } : {}, novo.tema ? { tema: novo.tema } : {});
@@ -884,7 +922,12 @@
       if (!d.titulo || !d.data) return;
       btn.disabled = true;
       try {
+        const antes = d.id && Store.eventos.find(x => String(x.id) === String(d.id));
+        const eds = !antes ? [] : Store.vinculos.filter(v => v.tipo === "evento" && String(v.evento_id) === String(d.id)).flatMap(v => [].concat(
+          d.titulo !== antes.titulo ? [{ linha: v.linha || 0, demanda: v.demanda, campo: "demanda", valor: d.titulo }] : [],
+          !v.publicacao && d.data !== String(antes.data).slice(0, 10) ? [{ linha: v.linha || 0, demanda: v.demanda, campo: "prazo", valor: d.data }] : []));
         await Store.saveEvento(d);
+        if (eds.length) await Store.addEdicoes(eds);
         const salvo = d.id ? d.id : (Store.eventos.filter(x => x.titulo === d.titulo && String(x.data).slice(0, 10) === d.data).pop() || {}).id;
         if (d.data.slice(0, 7) !== Cal.mes) Cal.mes = clampMes(d.data.slice(0, 7));
         notify();
@@ -909,10 +952,15 @@
         if (!mesmo && (atual || esc_)) {
           if (atual) await Store.delVinculo(atual.id);
           if (esc_) await Store.addVinculo(Object.assign(chaveVinc(r), esc_.tipo === "evento"
-            ? { tipo: "evento", evento_id: esc_.evento_id } : { tipo: "post", conta: esc_.conta, data: esc_.data, tema: esc_.tema }));
+            ? { tipo: "evento", evento_id: esc_.evento_id } : { tipo: "post", conta: esc_.conta, data: esc_.data, tema: esc_.tema, publicacao: true }));
         }
-        const pz = novo.find(e => e.campo === "prazo");
-        if (pz) novo.push(...await moveVinculado(r, pz.valor));
+        const pz = novo.find(e => e.campo === "prazo"), nm = novo.find(e => e.campo === "demanda");
+        if (mesmo || (!atual && !esc_)) {
+          if (pz) await moveVinculado(r, pz.valor);
+          const pub = el.data_pub && el.data_pub.value;
+          if (pub && pub !== dataPubDe(atual)) novo.push(...await movePublicacao(atual, pub));
+        }
+        if (nm) await renomeiaEventos(r, nm.valor);
         await Store.addEdicoes(novo); Cal.dlg.close(); notify();
       }
       catch (e) { msg.textContent = erroMsg(e); btn.disabled = false; }
@@ -924,7 +972,10 @@
       try {
         await Store.decide(f.dataset.id, "aceita", dp);
         const s = Store.sols.find(x => String(x.id) === String(f.dataset.id));
-        if (s && dp && ehPost(s)) await Store.addVinculo({ linha: 0, demanda: "sol:" + s.id, tipo: "post", conta: s.marca === "Tanyno" ? "Oficial" : "Glass", data: dp, tema: s.titulo });
+        if (s && dp && ehPost(s)) await Store.addVinculo({ linha: 0, demanda: "sol:" + s.id, tipo: "post", conta: s.marca === "Tanyno" ? "Oficial" : "Glass", data: dp, tema: s.titulo, publicacao: true });
+        else if (s && dp && ehPubEvento(s))
+          await Store.saveEvento({ data: dp, titulo: s.titulo.slice(0, 120), tipo: "Post extra", conta: contaEvento(s),
+            descricao: `Demanda pedida por ${s.criado_por || ""} pelo site (${s.tipo}).`, demanda: "sol:" + s.id });
         Cal.dlg.close(); notify();
       }
       catch (e) { msg.textContent = erroMsg(e); btn.disabled = false; }
@@ -934,8 +985,9 @@
       const d = {};
       ["titulo", "tipo", "marca", "prazo", "urgencia", "objetivo", "briefing", "texto_aprovado", "formatos", "produtos", "links", "observacoes"]
         .forEach(k => { const v = f.elements[k].value.trim(); d[k] = v || null; });
-      d.data_publicacao = ehPostForm(f) ? d.prazo : null;
-      if (!d.titulo || !d.tipo || !d.marca || !d.prazo || !d.briefing) { msg.textContent = "Preencha os campos com *."; return; }
+      d.data_publicacao = ehSocialForm(f) ? f.elements.data_publicacao.value || null : null;
+      if (!d.titulo || !d.tipo || !d.marca || !d.prazo || !d.briefing || (ehSocialForm(f) && !d.data_publicacao)) { msg.textContent = "Preencha os campos com *."; return; }
+      if (d.data_publicacao && d.data_publicacao < d.prazo) { msg.textContent = "A data de publicação não pode ser antes do prazo de entrega."; return; }
       btn.disabled = true; msg.textContent = "Enviando…";
       try { await Store.addSolicitacao(d); abre("demanda-ok", null, { titulo: d.titulo }); notify(); }
       catch (e) { msg.textContent = erroMsg(e).replace("salvar", "enviar"); btn.disabled = false; }
@@ -1047,8 +1099,8 @@
     acoesDemanda(r) { abre("dem-acoes", null, r); },
     async editaCampo(r, campo, valor) {
       try {
-        const extra = campo === "prazo" ? await moveVinculado(r, valor) : [];
-        await Store.addEdicoes([edicao(r, campo, valor)].concat(extra)); notify();
+        if (campo === "prazo") await moveVinculado(r, valor);
+        await Store.addEdicoes([edicao(r, campo, valor)]); notify();
       } catch (e) { alert(erroMsg(e)); notify(); }
     },
     async recusarDemanda(id) {

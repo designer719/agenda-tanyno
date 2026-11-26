@@ -183,6 +183,7 @@ tbody tr.group:first-child td{padding-top:16px}
 .ctag.c-Glass{background:var(--glass-ink)}
 .ctag.c-Ambas{background:var(--ink)}
 .ctag.c-Interno{background:#DCDCDC;color:var(--ink)}
+.ctag.c-Mililitros{background:#5B4A6B}
 .pc-fmt{font-size:11px;font-weight:700;color:var(--ink-2)}
 .pc-mini{display:block;width:100%;aspect-ratio:1/1;border-radius:4px;overflow:hidden;background:#EAEAEA}
 .pc-mini{position:relative}
@@ -464,7 +465,7 @@ const R={
    <div class="stat ${late?"warn":""}"><b>${late}</b><span>Atrasadas</span></div>
    <div class="stat"><b>${hoje}</b><span>Para hoje</span></div>
    <div class="stat"><b>${D.concluidos.length}</b><span>Concluídas</span></div></div>
-   ${pend.length?`<section class="sols" aria-labelledby="sols-t"><h2 id="sols-t">Enviadas pelo site</h2><p class="lead">Novas, aguardando aceite. A aceita vai na hora para as demandas abaixo; se for publicação, entra no cronograma na próxima atualização automática.</p><div class="sol-l">${pend.map(s=>`<div class="sol"><button type="button" class="sol-b" data-sol="${esc(s.id)}"><b>${esc(s.titulo)}</b><span>${esc(s.tipo)} · ${esc(s.marca)} · ${s.data_publicacao?"publicação":"prazo"} ${fmt(String(s.data_publicacao||s.prazo).slice(0,10))}</span><span>Pedido por ${esc(s.criado_por)}</span></button>${acao(s)}</div>`).join("")}</div></section>`:""}
+   ${pend.length?`<section class="sols" aria-labelledby="sols-t"><h2 id="sols-t">Enviadas pelo site</h2><p class="lead">Novas, aguardando aceite. A aceita vai na hora para as demandas abaixo; se for publicação, entra no cronograma na próxima atualização automática.</p><div class="sol-l">${pend.map(s=>`<div class="sol"><button type="button" class="sol-b" data-sol="${esc(s.id)}"><b>${esc(s.titulo)}</b><span>${esc(s.tipo)} · ${esc(s.marca)} · prazo ${fmt(String(s.prazo).slice(0,10))}${s.data_publicacao?` · publicação ${fmt(String(s.data_publicacao).slice(0,10))}`:""}</span><span>Pedido por ${esc(s.criado_por)}</span></button>${acao(s)}</div>`).join("")}</div></section>`:""}
    <p class="lead">Ordenadas por prazo. As riscadas já foram feitas e vão para Concluídos no fim do dia.</p>`+
    card(["Feito","Demanda","Prioridade","Prazo","Status","Observações"].concat(gestor?['<span class="sr">Editar</span>']:[]),(LINHAS=rows).map((r,i)=>{
      r.sol=solDe(r);
