@@ -360,8 +360,23 @@
       if (m2) m2.textContent = aviso;
     } catch (e) { msg.textContent = "Não foi possível enviar: " + (e.message || e); inp.disabled = false; }
   }
+  // prévia quadrada da 1ª imagem do post no card do calendário (link assinado guardado até perto de vencer)
+  async function preencheMinis() {
+    const imgs = [...(Cal.root ? Cal.root.querySelectorAll("img[data-mini]") : [])];
+    if (!imgs.length) return;
+    Cal.minis = Cal.minis || {};
+    const agora = Date.now(), falta = [...new Set(imgs.map(i => i.dataset.mini))].filter(c => !(Cal.minis[c] && Cal.minis[c].ate > agora));
+    if (falta.length) {
+      try {
+        const urls = await Store.urlsAnexos(falta.map(c => Store.anexos.find(a => a.caminho === c) || { caminho: c }));
+        falta.forEach(c => { if (urls[c]) Cal.minis[c] = { url: urls[c], ate: agora + 50 * 60 * 1000 }; });
+      } catch (e) { return; }                       // sem prévia: o card continua com o 📎
+    }
+    imgs.forEach(i => { const m = Cal.minis[i.dataset.mini]; if (m && i.src !== m.url) i.src = m.url; });
+  }
   function cardPost(p) {
-    return `<button type="button" class="pcard c-${p.conta}" data-cal-post="${esc(p.id)}">
+    const img = anexosDe("post", (p.base || p).id).find(a => String(a.mime).startsWith("image/"));
+    return `<button type="button" class="pcard c-${p.conta}" data-cal-post="${esc(p.id)}">${img ? `<span class="pc-mini"><img data-mini="${esc(img.caminho)}" alt="" loading="lazy"></span>` : ""}
       <span class="pc-top"><span class="pc-conta c-${esc(p.conta)}">${esc(p.conta)}</span>${p.formato ? ` · ${esc(p.formato)}` : ""}</span>
       <span class="pc-tema">${esc(p.tema)}</span>
       <span class="pc-bot">${stPill(p.status)}${p.provisorio ? `<span class="selo s-wait">Entra no cronograma</span>` : selo(Store.decisao(p.id))}${(n => n ? `<span class="selo s-anx" title="${n} ${n > 1 ? "arquivos" : "arquivo"}">📎 ${n}</span>` : "")(anexosDe("post", (p.base || p).id).length)}</span></button>`;
@@ -953,6 +968,7 @@
     if (!Cal.root || !Cal.root.isConnected || !Cal.ativo) return;
     const foco = document.activeElement && document.activeElement.dataset ? Object.assign({}, document.activeElement.dataset) : null;
     Cal.root.innerHTML = htmlCalendario();
+    preencheMinis();
     if (foco) { // devolve o foco ao mesmo controle depois de redesenhar
       const k = Object.keys(foco).find(x => x.startsWith("cal"));
       if (k) { const attr = "data-" + k.replace(/[A-Z]/g, c => "-" + c.toLowerCase()); const el = Cal.root.querySelector(`[${attr}="${CSS.escape(foco[k])}"]`); if (el) el.focus(); }
