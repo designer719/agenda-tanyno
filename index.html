@@ -296,6 +296,7 @@ td.ac{width:56px;text-align:right}
 .lapis:hover{border-color:var(--ink-2);color:var(--ink)}
 .lapis.on{width:auto;padding:0 10px;background:var(--ink);border-color:var(--ink);color:#fff}
 .lapis:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.cc{display:inline-flex;align-items:center;gap:10px}
 .chk-b{font:inherit;cursor:pointer;border:0;background:none;padding:4px;border-radius:8px;line-height:0}
 .chk-b:hover .check{box-shadow:inset 0 0 0 1.5px var(--wine)}
 select.ed,input.ed{font:inherit;font-size:13px;border:1px solid #D6D6D6;border-radius:8px;padding:5px 8px;background:#fff;color:var(--ink);max-width:100%}
@@ -394,7 +395,7 @@ dialog.cal-dlg.pv-on{width:min(1120px,calc(100vw - 32px));overflow:hidden}
   td.c{position:absolute;right:14px;top:14px;width:auto;padding:0}
   td.c.n0{position:static;padding:0 0 2px}
   td.ac{width:auto;text-align:right;padding-top:8px}
-  td[data-l]:not(.main):not(.c)::before{content:attr(data-l);display:inline-block;min-width:96px;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+  td[data-l]:not(.main):not(.c)::before{content:attr(data-l);display:inline-block;min-width:96px;margin-right:8px;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
   td:empty{display:none}
   td.note{padding-top:6px}
   td.note::before{display:block !important;margin-bottom:2px}
@@ -450,7 +451,7 @@ function demandasTodas(){const eds=Calendario.edicoes();
   const provisorias=Calendario.solicitacoes().filter(s=>s.situacao==="aceita"&&!s.na_planilha&&!D.demandas.some(r=>r[1]===s.titulo&&r[5]===s.criado_por))
     .map(s=>{const r=[false,s.titulo,s.urgencia||"Média",String(s.prazo).slice(0,10),"A fazer",s.criado_por||"",obsSol(s)];r.sol=s;r.linha=0;r.orig="sol:"+s.id;return r});
   return daPlanilha.concat(provisorias).map(r=>{
-    for(const e of eds)if((e.linha===r.linha&&e.demanda===r.orig)||(r.solKey&&e.demanda===r.solKey)){if(e.campo==="excluir")r.excluida=true;else r[EDCOL[e.campo]]=e.campo==="feito"?e.valor==="true":e.valor}
+    for(const e of eds)if((e.linha===r.linha&&e.demanda===r.orig)||(r.solKey&&e.demanda===r.solKey)){if(e.campo==="excluir")r.excluida=true;else {r[EDCOL[e.campo]]=e.campo==="feito"?e.valor==="true":e.valor;if(e.campo==="feito")r.feitoEm=e.criado_em}}
     return r}).filter(r=>!r.excluida)}
 let LINHAS=[];   // linhas desenhadas na tabela (os botões apontam pelo índice)
 const EDITANDO=new Set();   // linhas com o lápis ligado (chave: linha|nome original)
@@ -461,7 +462,7 @@ const R={
  demandas(){
   const t=today(),todas=demandasTodas(); const open=todas.filter(r=>!r[0]&&r[4]!=="Entregue");
   const pr={Alta:0,"Média":1,Baixa:2,"":3};
-  const rows=[...todas].sort((a,b)=>(a[0]-b[0])||((a[3]||"9")>(b[3]||"9")?1:(a[3]||"9")<(b[3]||"9")?-1:0)||(pr[a[2]||""]-pr[b[2]||""]));
+  const rows=[...open].sort((a,b)=>(a[0]-b[0])||((a[3]||"9")>(b[3]||"9")?1:(a[3]||"9")<(b[3]||"9")?-1:0)||(pr[a[2]||""]-pr[b[2]||""]));
   const late=open.filter(r=>r[3]&&r[3].slice(0,10)<t).length, hoje=open.filter(r=>r[3]&&r[3].slice(0,10)===t).length;
   // demanda pedida pelo site = mesma Demanda e mesmo Pedido por na planilha
   const sols=Calendario.solicitacoes(), solDe=r=>r.sol||sols.find(s=>s.titulo===(r.orig||r[1])&&s.criado_por===r[5]);
@@ -475,9 +476,9 @@ const R={
    <div class="stat"><b>${open.length}</b><span>Em aberto</span></div>
    <div class="stat ${late?"warn":""}"><b>${late}</b><span>Atrasadas</span></div>
    <div class="stat"><b>${hoje}</b><span>Para hoje</span></div>
-   <div class="stat"><b>${D.concluidos.length}</b><span>Concluídas</span></div></div>
+   <div class="stat"><b>${D.concluidos.length+todas.length-open.length}</b><span>Concluídas</span></div></div>
    ${pend.length?`<section class="sols" aria-labelledby="sols-t"><h2 id="sols-t">Enviadas pelo site</h2><p class="lead">Novas, aguardando aceite. A aceita vai na hora para as demandas abaixo; se for publicação, entra no cronograma na próxima atualização automática.</p><div class="sol-l">${pend.map(s=>`<div class="sol"><button type="button" class="sol-b" data-sol="${esc(s.id)}"><b>${esc(s.titulo)}</b><span>${esc(s.tipo)} · ${esc(s.marca)} · prazo ${fmt(String(s.prazo).slice(0,10))}${s.data_publicacao?` · publicação ${fmt(String(s.data_publicacao).slice(0,10))}`:""}</span><span>Pedido por ${esc(s.criado_por)}</span></button>${acao(s)}</div>`).join("")}</div></section>`:""}
-   <p class="lead">Ordenadas por prazo. As riscadas já foram feitas e vão para Concluídos no fim do dia.</p>`+
+   <p class="lead">Ordenadas por prazo. Ao concluir, a demanda vai para Concluídos.</p>`+
    card(["Feito","Demanda","Prioridade","Prazo","Status","Observações"].concat(gestor?['<span class="sr">Editar</span>']:[]),(LINHAS=rows).map((r,i)=>{
      r.sol=solDe(r);
      const done=r[0]||r[4]==="Entregue"; const d=r[3]?r[3].slice(0,10):""; const lt=!done&&d&&d<t; const hj=!done&&d===t;
@@ -501,8 +502,12 @@ const R={
      return h+`<tr class="${r[3]==="Rodrigo"?"me":""}"><td class="c n0" data-l="Nº"><span class="num">${esc(r[0])}</span></td><td class="main" data-l="Atividade">${esc(r[2])}</td><td data-l="Responsável"><span class="${r[3]==="Rodrigo"?"who":""}">${esc(r[3])}</span></td></tr>`}).join(""))},
  onboarding(){return barra("Onboarding e endomarketing")+`<p class="lead">Materiais para quem entra na Tanyno e datas especiais da equipe.</p>`+
    card(["Material","Tipo","Quando fazer"],D.onboarding.map(r=>`<tr><td class="main" data-l="Material">${esc(r[0])}</td><td data-l="Tipo"><span class="tag">${esc(r[1])}</span></td><td data-l="Quando">${esc(r[2])}</td></tr>`).join(""))},
- concluidos(){return barra("Concluídos")+`<p class="lead">Tudo o que já foi entregue.</p>`+(D.concluidos.length?
-   card(["Concluído em","Demanda","Prioridade","Prazo"],[...D.concluidos].reverse().map(r=>`<tr><td class="date" data-l="Concluído em">${fmt(r[0])}</td><td class="main" data-l="Demanda">${esc(r[1])}</td><td data-l="Prioridade">${pill("p-"+r[2],r[2])}</td><td class="date" data-l="Prazo">${fmt(r[3])}</td></tr>`).join("")):`<div class="empty">Nada concluído ainda.</div>`)}
+ concluidos(){const gestor=Calendario.podeAceitar(),dia=x=>x?new Date(x).toLocaleDateString("sv-SE",{timeZone:"America/Sao_Paulo"}):today();
+  const novas=(LINHAS=demandasTodas().filter(r=>r[0]||r[4]==="Entregue").sort((a,b)=>String(b.feitoEm||"").localeCompare(String(a.feitoEm||""))));
+  const htmlNova=(r,i)=>{const pode=gestor&&r.linha!==undefined;
+    return `<tr><td class="date" data-l="Concluído em"><span class="cc">${pode?`<button type="button" class="chk-b" data-acoes="${i}" aria-label="Reabrir, editar ou excluir: ${esc(r[1])}">${box(true)}</button>`:""}${fmt(dia(r.feitoEm))}</span></td><td class="main" data-l="Demanda"><button type="button" class="dem-b" data-ver="${i}">${esc(r[1])}</button></td><td data-l="Prioridade">${pill("p-"+r[2],r[2])}</td><td class="date" data-l="Prazo">${fmt((r[3]||"").slice(0,10))}</td></tr>`};
+  return barra("Concluídos")+`<p class="lead">Tudo o que já foi entregue.${novas.length&&gestor?" Para reabrir uma demanda, clique na caixa marcada.":""}</p>`+(D.concluidos.length+novas.length?
+   card(["Concluído em","Demanda","Prioridade","Prazo"],novas.map(htmlNova).join("")+[...D.concluidos].reverse().map(r=>`<tr><td class="date" data-l="Concluído em">${fmt(r[0])}</td><td class="main" data-l="Demanda">${esc(r[1])}</td><td data-l="Prioridade">${pill("p-"+r[2],r[2])}</td><td class="date" data-l="Prazo">${fmt(r[3])}</td></tr>`).join("")):`<div class="empty">Nada concluído ainda.</div>`)}
 };
 let CUR=null;
 const LOGIN_NA_URL=()=>/access_token|error_description/.test(location.hash);
@@ -538,7 +543,7 @@ async function abreAgenda(){const st=Calendario.store;
   catch(e){console.error(e);porta("fora")}
   finally{abrindo=false}}
 function fechaAgenda(){D=null;CUR=null;Calendario.unmount();document.getElementById("view").innerHTML="";document.getElementById("tabs").innerHTML=""}
-function count(id){if(id==="calendario"){const n=Calendario.pendentes();return n==null?"":n}if(id==="demandas")return demandasTodas().filter(r=>!r[0]&&r[4]!=="Entregue").length;if(id==="digital"||id==="site")return D[id].filter(r=>!r[0]).length;return D[id].length}
+function count(id){if(id==="calendario"){const n=Calendario.pendentes();return n==null?"":n}if(id==="demandas")return demandasTodas().filter(r=>!r[0]&&r[4]!=="Entregue").length;if(id==="concluidos")return D.concluidos.length+demandasTodas().filter(r=>r[0]||r[4]==="Entregue").length;if(id==="digital"||id==="site")return D[id].filter(r=>!r[0]).length;return D[id].length}
 function renderTabs(){document.getElementById("tabs").innerHTML=TABS.map(([id,l])=>{const n=count(id),cal=id==="calendario";
   return `<button type="button" class="ni" data-id="${id}"${id===CUR?' aria-current="page"':""}><span class="ni-ic" aria-hidden="true">${ICO[id]||""}</span><span class="ni-t">${l}</span>${n===""?"":`<span class="n"${cal?` title="Posts aguardando aprovação" aria-label="${n} aguardando aprovação"`:""}>${n}</span>`}</button>`}).join("")}
 function show(id){CUR=id;document.querySelectorAll(".ni").forEach(b=>b.dataset.id===id?b.setAttribute("aria-current","page"):b.removeAttribute("aria-current"));const v=document.getElementById("view");
@@ -564,7 +569,7 @@ document.getElementById("view").addEventListener("change",e=>{const c=e.target.c
 Calendario.onUpdate=()=>{const u=Calendario.store.user;
   if(!u||!u.permitido){if(D)fechaAgenda();abreAgenda();return}
   if(!D){abreAgenda();return}
-  renderTabs();if(CUR==="demandas")show(CUR)};
+  renderTabs();if(CUR==="demandas"||CUR==="concluidos")show(CUR)};
 Calendario.start().then(()=>{if(LOGIN_NA_URL()){try{history.replaceState(null,"",location.pathname+location.search+"#calendario")}catch(e){}}abreAgenda()});
 </script>
 </body>
