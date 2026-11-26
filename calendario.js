@@ -200,6 +200,21 @@
       await this.refresh();
     },
 
+    async criaPostSocial(d) { // demanda já aceita + post (Tanyno/Glass) ou evento de publicação (Mililitros/Interno)
+      if (this.mode === "demo") {
+        const sid = "s" + Date.now();
+        this.sols.unshift(Object.assign({ id: sid, situacao: "aceita", na_planilha: false, criado_por: this.user.nome, criado_em: new Date().toISOString() }, d));
+        if (d.marca === "Tanyno" || d.marca === "Tanyno Glass")
+          this.vinculos.push({ id: "v" + sid, linha: 0, demanda: "sol:" + sid, tipo: "post", conta: d.marca === "Tanyno" ? "Oficial" : "Glass", data: d.data_publicacao, tema: d.titulo, publicacao: true });
+        else await this.saveEvento({ data: d.data_publicacao, titulo: d.titulo.slice(0, 120), tipo: "Post extra", conta: d.marca === "Mililitros" ? "Mililitros" : "Interno",
+          descricao: `Post para redes sociais criado no calendário (${d.tipo}).`, demanda: "sol:" + sid });
+        return;
+      }
+      const { error } = await this.client.rpc("cria_post_social", { d });
+      if (error) throw error;
+      await this.refresh();
+    },
+
     decisao(id) { const a = this.aprov.find(x => x.post_id === id); return a ? a.decisao : null; },
     historico(id) { return this.aprov.filter(x => x.post_id === id); },
     pode() { return this.mode !== "off" && !!(this.user && this.user.permitido); },
@@ -311,7 +326,15 @@
   const ctag = (conta, nome) => `<span class="ctag c-${esc(conta)}">${esc(nome || conta)}</span>`;
   const addBtn = d => Store.mode === "off" ? "" :
     `<button type="button" class="cd-add" data-cal-add="${d}" aria-label="Adicionar evento em ${extenso(d)}" title="Adicionar evento">+</button>`;
-  const evChip = e => `<button type="button" class="evchip" data-cal-ev="${esc(e.id)}"><span aria-hidden="true">${TIPOS[e.tipo] || "📌"}</span><span class="evchip-t">${esc(e.titulo)}</span>${anexosDe("evento", e.id).length ? `<span aria-label="tem arquivos">📎</span>` : ""}</button>`;
+  const evChip = e => { const mini = htmlMini(anexosDe("evento", e.id));
+    return `<button type="button" class="evchip${mini ? " ev-mini" : ""}" data-cal-ev="${esc(e.id)}">${mini}<span class="ev-l"><span aria-hidden="true">${TIPOS[e.tipo] || "📌"}</span><span class="evchip-t">${esc(e.titulo)}</span>${anexosDe("evento", e.id).length ? `<span aria-label="tem arquivos">📎</span>` : ""}</span></button>`; };
+  // prévia quadrada: a 1ª imagem ou vídeo (vídeo mostra o primeiro quadro com um play no meio)
+  function htmlMini(lista) {
+    const m = lista.find(a => /^(image|video)\//.test(String(a.mime)));
+    return !m ? "" : String(m.mime).startsWith("video/")
+      ? `<span class="pc-mini"><video data-mini="${esc(m.caminho)}" muted playsinline preload="metadata" tabindex="-1" aria-hidden="true"></video><span class="pc-play" aria-hidden="true"></span></span>`
+      : `<span class="pc-mini"><img data-mini="${esc(m.caminho)}" alt="" loading="lazy"></span>`;
+  }
   // ---------- arquivos ----------
   const ANX_TIPOS = ["image/png", "image/jpeg", "image/webp", "image/gif", "video/mp4", "video/quicktime", "video/webm", "application/pdf"];
   const anexosDe = (tipo, alvo) => Store.anexos.filter(a => a.tipo === tipo && String(a.alvo) === String(alvo));
@@ -386,11 +409,7 @@
     imgs.forEach(i => { const m = Cal.minis[i.dataset.mini], u = m && (i.tagName === "VIDEO" ? m.url + "#t=0.1" : m.url); if (u && i.src !== u) i.src = u; });
   }
   function cardPost(p) {
-    // prévia: a 1ª imagem ou vídeo do post (vídeo mostra o primeiro quadro com um play no meio)
-    const m = anexosDe("post", (p.base || p).id).find(a => /^(image|video)\//.test(String(a.mime)));
-    const mini = !m ? "" : String(m.mime).startsWith("video/")
-      ? `<span class="pc-mini"><video data-mini="${esc(m.caminho)}" muted playsinline preload="metadata" tabindex="-1" aria-hidden="true"></video><span class="pc-play" aria-hidden="true"></span></span>`
-      : `<span class="pc-mini"><img data-mini="${esc(m.caminho)}" alt="" loading="lazy"></span>`;
+    const mini = htmlMini(anexosDe("post", (p.base || p).id));
     const pub = p.status === "Publicado";
     return `<button type="button" class="pcard c-${p.conta}${pub ? " pc-pub" : ""}" data-cal-post="${esc(p.id)}">${pub ? `<span class="pc-pubtag">✓ Publicado</span>` : ""}${mini}
       <span class="pc-top"><span class="pc-conta c-${esc(p.conta)}">${esc(p.conta)}</span>${p.formato ? ` · ${esc(p.formato)}` : ""}</span>
@@ -568,16 +587,42 @@
     const opt = (lista, sel) => Object.keys(lista).map(k => `<option value="${esc(k)}"${k === sel ? " selected" : ""}>${typeof lista[k] === "string" && lista === CONTAS_EV ? esc(lista[k]) : esc(k)}</option>`).join("");
     return `<form class="ev-form" data-ev-form data-id="${esc(e.id || "")}">
       <div class="dlg-h"><h3 class="dlg-t" id="dlg-titulo">${e.id ? "Editar evento" : "Novo evento"}</h3>${fechar}</div>
+      <label class="fl">Tipo<select name="tipo">${opt(TIPOS, e.tipo || "Data comemorativa")}${e.id ? "" : `<option value="${POST_SOCIAL}">${POST_SOCIAL}</option>`}</select></label>
       <label class="fl">Título<input name="titulo" required maxlength="120" value="${esc(e.titulo || "")}"></label>
-      <label class="fl">Data<input type="date" name="data" required min="${MES_MIN}-01" value="${esc(String(e.data || "").slice(0, 10))}"></label>
       <div class="row2">
-        <label class="fl">Tipo<select name="tipo">${opt(TIPOS, e.tipo || "Data comemorativa")}</select></label>
-        <label class="fl">Conta<select name="conta">${opt(CONTAS_EV, e.conta || "Ambas")}</select></label>
+        <label class="fl"><span data-ev-data-rot>Data</span><input type="date" name="data" required min="${MES_MIN}-01" value="${esc(String(e.data || "").slice(0, 10))}"></label>
+        <label class="fl" data-ev-so>Conta<select name="conta">${opt(CONTAS_EV, e.conta || "Ambas")}</select></label>
       </div>
-      <label class="fl">Descrição<textarea name="descricao" rows="3">${esc(e.descricao || "")}</textarea></label>
+      <label class="fl" data-ev-so>Descrição<textarea name="descricao" rows="3">${esc(e.descricao || "")}</textarea></label>
+      ${e.id ? "" : `<div data-ps hidden>
+        <p class="muted small">Entra já aceito nas demandas. Tanyno e Tanyno Glass viram post no calendário e no cronograma; Mililitros e Interno viram evento.</p>
+        <div class="row2">
+          <label class="fl">Tipo de peça *<select name="ps_tipo">${opts(Object.keys(FORMATO))}</select></label>
+          <label class="fl">Marca *<select name="ps_marca">${opts(SOL_MARCAS)}</select></label>
+        </div>
+        <div class="row2">
+          <label class="fl">Prazo de entrega *<input type="date" name="ps_prazo" min="${hojeSP()}"></label>
+          <label class="fl">Urgência<select name="ps_urgencia">${opts(SOL_URG, "Média")}</select></label>
+        </div>
+        ${PS_AREAS.map(([n, rot, dica]) => `<label class="fl">${rot}${dica ? ` <small>${dica}</small>` : ""}${n === "formatos"
+          ? `<input name="ps_formatos" maxlength="1000">` : `<textarea name="ps_${n}" rows="3" maxlength="${n === "briefing" || n === "texto_aprovado" ? 8000 : 3000}"></textarea>`}</label>`).join("")}
+      </div>`}
       <div class="row"><button type="submit" class="btn-pri">Salvar</button><button type="button" class="btn-sec" data-dlg-close>Cancelar</button></div>
       <p class="form-msg" role="status"></p>
     </form>`;
+  }
+
+  const POST_SOCIAL = "Post para redes sociais";
+  const PS_AREAS = [["objetivo", "Objetivo e público", "Para que serve e para quem"], ["briefing", "Briefing *", "O que precisa ser feito, com todos os detalhes"],
+    ["texto_aprovado", "Texto aprovado", "Entra palavra por palavra"], ["formatos", "Formatos e tamanhos", ""], ["produtos", "Vinhos e produtos", "Rótulos, safras, códigos"],
+    ["links", "Links de referência e arquivos", "Drive, site, referências; um por linha"], ["observacoes", "Observações", ""]];
+  function ajustaFormEvento(f) {
+    const ps = f.elements.tipo.value === POST_SOCIAL, box = f.querySelector("[data-ps]");
+    if (!box) return;
+    box.hidden = !ps;
+    f.querySelectorAll("[data-ev-so]").forEach(x => { x.hidden = ps; });
+    f.querySelector("[data-ev-data-rot]").textContent = ps ? "Data de publicação" : "Data";
+    f.elements.ps_prazo.required = ps; f.elements.ps_briefing.required = ps;
   }
 
   function htmlLogin() {
@@ -774,6 +819,7 @@
       Cal.dlg.addEventListener("change", ev => {
         const f = ev.target.form;
         if (f && f.hasAttribute("data-dem-form") && (ev.target.name === "tipo" || ev.target.name === "marca")) ajustaFormDemanda(f);
+        if (f && f.hasAttribute("data-ev-form") && ev.target.name === "tipo") ajustaFormEvento(f);
         if (ev.target.matches && ev.target.matches("[data-anx-input]")) subirArquivos(ev.target);
       });
       Cal.dlg.addEventListener("close", () => { Cal.aberto = null; if (Cal.ultimoFoco && document.contains(Cal.ultimoFoco)) Cal.ultimoFoco.focus(); });
@@ -929,6 +975,21 @@
         const cap1 = t => t.charAt(0).toUpperCase() + t.slice(1);
         await Store.addAprov(p.id, "ajustar", txt || (mud.length ? `${cap1(mud.join(", "))} ajustado${mud.length > 1 ? "s" : ""} no site.` : ""));
         Cal.ajustando = null; notify();
+      } catch (e) { msg.textContent = erroMsg(e); btn.disabled = false; }
+      return;
+    }
+    if (f.hasAttribute("data-ev-form") && f.elements.tipo.value === POST_SOCIAL) {
+      const el = f.elements, d = { titulo: el.titulo.value.trim(), tipo: el.ps_tipo.value, marca: el.ps_marca.value, prazo: el.ps_prazo.value,
+        data_publicacao: el.data.value, urgencia: el.ps_urgencia.value };
+      PS_AREAS.forEach(([n]) => { d[n] = el["ps_" + n].value.trim() || null; });
+      if (d.titulo.length < 3 || !d.prazo || !d.data_publicacao || !d.briefing) { msg.textContent = "Preencha título, data de publicação, prazo de entrega e briefing."; return; }
+      if (d.briefing.length < 10) { msg.textContent = "Escreva um briefing com pelo menos 10 letras."; return; }
+      if (d.data_publicacao < d.prazo) { msg.textContent = "A data de publicação não pode ser antes do prazo de entrega."; return; }
+      btn.disabled = true; msg.textContent = "Salvando…";
+      try {
+        await Store.criaPostSocial(d);
+        if (d.data_publicacao.slice(0, 7) !== Cal.mes) Cal.mes = clampMes(d.data_publicacao.slice(0, 7));
+        Cal.dlg.close(); notify();
       } catch (e) { msg.textContent = erroMsg(e); btn.disabled = false; }
       return;
     }
