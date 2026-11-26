@@ -315,13 +315,31 @@
     let urls;
     try { urls = await Store.urlsAnexos(lista); } catch (e) { box.innerHTML = `<p class="muted small">Não foi possível abrir os arquivos agora.</p>`; return; }
     const g = !!(Store.user && Store.user.gestor);
-    box.innerHTML = lista.map(a => {
+    Cal.pvLista = lista; Cal.pvUrls = urls;
+    box.innerHTML = lista.map((a, i) => {
       const u = esc(urls[a.caminho] || ""), nome = esc(a.nome);
-      const corpo = a.mime.startsWith("image/") ? `<a href="${u}" target="_blank" rel="noopener" class="anx-img" title="Abrir ${nome}"><img src="${u}" alt="${nome}" loading="lazy"></a>`
-        : a.mime.startsWith("video/") ? `<video src="${u}" controls preload="metadata" playsinline class="anx-vid" aria-label="${nome}"></video>`
-        : `<a href="${u}" target="_blank" rel="noopener" class="anx-pdf"><span aria-hidden="true">📄</span><span>${nome}</span></a>`;
-      return `<figure class="anx-i">${corpo}${g ? `<button type="button" class="anx-x" data-anx-del="${esc(a.id)}" aria-label="Apagar ${nome}" title="Apagar">✕</button>` : ""}</figure>`;
+      const mini = a.mime.startsWith("image/") ? `<img src="${u}" alt="" loading="lazy">`
+        : a.mime.startsWith("video/") ? `<video src="${u}#t=0.1" preload="metadata" muted playsinline tabindex="-1"></video><span class="anx-play" aria-hidden="true">▶</span>`
+        : `<span class="anx-doc" aria-hidden="true">PDF</span>`;
+      return `<figure class="anx-i"><button type="button" class="anx-th" data-pv-ir="${i}" aria-label="Ver ${nome}" title="${nome}">${mini}</button>${g ? `<button type="button" class="anx-x" data-anx-del="${esc(a.id)}" aria-label="Apagar ${nome}" title="Apagar">✕</button>` : ""}</figure>`;
     }).join("");
+    desenhaMidia();
+  }
+  // arquivo em destaque à esquerda da janela: imagem inteira, vídeo tocando ali, PDF aberto
+  function desenhaMidia() {
+    const box = Cal.dlg && Cal.dlg.querySelector("[data-pv]"), l = Cal.pvLista || [];
+    if (!box || !l.length) return;
+    const n = l.length, i = Cal.pvI = Math.min(Cal.pvI || 0, n - 1), a = l[i], u = esc(Cal.pvUrls[a.caminho] || ""), nome = esc(a.nome);
+    const corpo = a.mime.startsWith("image/") ? `<img src="${u}" alt="${nome}">`
+      : a.mime.startsWith("video/") ? `<video src="${u}" controls playsinline preload="metadata" aria-label="${nome}"></video>`
+      : `<object data="${u}#view=FitH" type="application/pdf" aria-label="${nome}"><a class="pv-doc" href="${u}" target="_blank" rel="noopener"><span aria-hidden="true">PDF</span>${nome}</a></object>`;
+    box.innerHTML = `<div class="pv-c">${corpo}</div>
+      ${n > 1 ? `<span class="pv-n">${i + 1} / ${n}</span>
+        <button type="button" class="pv-seta pv-ant" data-pv-ir="${(i - 1 + n) % n}" aria-label="Arquivo anterior">‹</button>
+        <button type="button" class="pv-seta pv-prox" data-pv-ir="${(i + 1) % n}" aria-label="Próximo arquivo">›</button>
+        <div class="pv-dots">${l.map((x, j) => `<button type="button" data-pv-ir="${j}" aria-label="Arquivo ${j + 1}"${j === i ? ` aria-current="true"` : ""}></button>`).join("")}</div>` : ""}
+      <a class="pv-abrir" href="${u}" target="_blank" rel="noopener">Abrir ↗</a>`;
+    Cal.dlg.querySelectorAll(".anx-th").forEach((b, j) => b.classList.toggle("on", j === i));
   }
   async function subirArquivos(inp) {
     const sec = inp.closest("[data-anx]"), msg = sec.querySelector("[data-anx-msg]"), files = [...inp.files];
@@ -436,6 +454,7 @@
   /* ---------- janelas ---------- */
   const campo = (rot, v) => v ? `<div class="dl-i"><dt>${esc(rot)}</dt><dd>${esc(v)}</dd></div>` : "";
   const fechar = `<button type="button" class="dlg-x" data-dlg-close aria-label="Fechar">✕</button>`;
+  const LAPIS = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg>';
 
   function htmlPost(p) {
     const lista = postsMes(), i = lista.findIndex(x => x.id === p.id);
@@ -460,7 +479,11 @@
         </form>
         <div class="hist"><h4>Histórico</h4>${hist.length ? `<ol>${hist.map(h => `<li>${selo(h.decisao)} <b>${esc(h.autor || "")}</b> <span class="muted">· ${quando(h.criado_em)}</span>${h.comentario ? `<p>${esc(h.comentario)}</p>` : ""}</li>`).join("")}</ol>` : `<p class="muted">Nenhuma decisão ainda.</p>`}</div>`;
     }
-    return `<div class="dlg-h"><div class="dlg-meta">${ctag(p.conta, CONTA_NOME[p.conta])}<span class="dlg-data">${cap(extenso(p.data))}</span></div>${fechar}</div>
+    const g = !!(Store.user && Store.user.gestor) && Store.mode !== "off";
+    return `<div class="dlg-h"><div class="dlg-meta">${ctag(p.conta, CONTA_NOME[p.conta])}<span class="dlg-dt"><span class="dlg-data">${cap(extenso(p.data))}</span>${g ? `<button type="button" class="lapis" data-post-data aria-label="Mudar a data do post" title="Mudar a data">${LAPIS}</button>` : ""}</span></div>${fechar}</div>
+      ${g ? `<form class="pd-form" data-post-data-form hidden><label class="fl">Nova data<input type="date" name="data" value="${esc(p.data)}" required></label>
+        <div class="row"><button type="submit" class="btn-pri">Mudar</button><button type="button" class="btn-sec" data-pd-cancel>Cancelar</button></div>
+        <p class="muted small">A demanda ligada a este post fica com o prazo no mesmo dia.</p><p class="form-msg" role="status"></p></form>` : ""}
       <h3 class="dlg-t" id="dlg-titulo">${esc(p.tema)}</h3>
       <div class="dlg-tags"><span class="pc-fmt">${esc(p.formato)}</span>${stPill(p.status)}</div>
       <dl class="dlg-dl">${campo("Ideia do post", p.ideia)}${campo("Gancho (1ª frase)", p.gancho)}${campo(p.conta === "Glass" ? "Vinho que aparece" : "Rótulo ou vinho", p.rotulo)}${campo("CTA", p.cta)}</dl>
@@ -693,6 +716,7 @@
       Cal.dlg.addEventListener("close", () => { Cal.aberto = null; if (Cal.ultimoFoco && document.contains(Cal.ultimoFoco)) Cal.ultimoFoco.focus(); });
     }
     if (!Cal.dlg.open) Cal.ultimoFoco = document.activeElement;
+    if (!Cal.aberto || Cal.aberto.id !== id) Cal.pvI = 0;
     Cal.aberto = { tipo, id, extra };
     desenhaDlg();
     if (!Cal.dlg.open) Cal.dlg.showModal();
@@ -716,7 +740,11 @@
     else if (a.tipo === "aceitar") { const s = Store.sols.find(x => String(x.id) === String(a.id)); if (!s) return Cal.dlg.close(); h = htmlAceitar(s); }
     else if (a.tipo === "demanda-ok") h = htmlDemandaOk(a.extra || {});
     else if (a.tipo === "sol") { const s = Store.sols.find(x => String(x.id) === String(a.id)); if (!s) return Cal.dlg.close(); h = htmlSol(s); }
-    Cal.dlg.innerHTML = `<div class="dlg-in">${h}</div>`;
+    const alvoAnx = a.tipo === "post" ? ((todosPosts().find(x => x.id === a.id) || {}).base || {}).id : a.id;
+    const midia = (a.tipo === "post" || a.tipo === "evento") && anexosDe(a.tipo, alvoAnx).length;
+    Cal.dlg.classList.toggle("pv-on", !!midia);
+    Cal.dlg.innerHTML = midia ? `<div class="dlg-in pv"><div class="pv-m" data-pv aria-label="Arquivos"><p class="muted small">Carregando…</p></div><div class="pv-i">${h}</div></div>`
+      : `<div class="dlg-in">${h}</div>`;
     preencheAnexos();
   }
 
@@ -734,6 +762,9 @@
     if (b.hasAttribute("data-cal-login")) { abre("login"); return; }
     if (b.dataset.nav) { abre("post", b.dataset.nav); return; }
     if (b.dataset.verSol) { abre("sol", b.dataset.verSol); return; }
+    if (b.dataset.pvIr !== undefined) { Cal.pvI = +b.dataset.pvIr; desenhaMidia(); return; }
+    if (b.hasAttribute("data-post-data")) { const f = Cal.dlg.querySelector("[data-post-data-form]"); f.hidden = !f.hidden; if (!f.hidden) f.elements.data.focus(); return; }
+    if (b.hasAttribute("data-pd-cancel")) { const f = Cal.dlg.querySelector("[data-post-data-form]"); f.hidden = true; f.reset(); return; }
     if (b.dataset.anxDel) {
       const a = Store.anexos.find(x => String(x.id) === b.dataset.anxDel);
       if (a && confirm(`Apagar o arquivo "${a.nome}"?`)) { try { await Store.apagarAnexo(a); notify(); } catch (e) { alert(erroMsg(e)); } }
@@ -794,6 +825,20 @@
     ev.preventDefault();
     const f = ev.target, msg = f.querySelector(".form-msg");
     const btn = f.querySelector("button[type=submit]");
+    if (f.hasAttribute("data-post-data-form")) {
+      const p = todosPosts().find(x => x.id === Cal.aberto.id), nova = f.elements.data.value;
+      if (!p || !nova || nova === p.data) { f.hidden = true; return; }
+      btn.disabled = true; msg.textContent = "Salvando…";
+      try {
+        const ligados = Store.vinculos.filter(v => v.tipo === "post" && v.conta === p.conta && String(v.data).slice(0, 10) === p.data && v.tema === p.tema);
+        for (const v of ligados) await Store.updVinculo(v.id, { data: nova });
+        const eds = [{ linha: 0, demanda: chavePost(Object.assign({}, p, p.base)), campo: "mover_post", valor: nova }]
+          .concat(ligados.map(v => ({ linha: v.linha || 0, demanda: v.demanda, campo: "prazo", valor: nova })));
+        if (p.provisorio && !ligados.some(v => v.demanda === "sol:" + p.sol)) eds.push({ linha: 0, demanda: "sol:" + p.sol, campo: "prazo", valor: nova });
+        await Store.addEdicoes(eds); notify();
+      } catch (e) { msg.textContent = erroMsg(e); btn.disabled = false; }
+      return;
+    }
     if (f.hasAttribute("data-apr-form")) {
       const txt = f.comentario.value.trim();
       if (!txt) { f.comentario.focus(); return; }

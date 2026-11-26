@@ -291,11 +291,37 @@ select.ed:focus-visible,input.ed:focus-visible,.dem-b:focus-visible,.chk-b:focus
 .anx h4{margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);display:flex;gap:8px}
 .anx-l{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory}
 .anx-i{position:relative;margin:0;flex:none;scroll-snap-align:start}
-.anx-img img{display:block;height:180px;width:auto;max-width:280px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:var(--soft)}
-.anx-vid{display:block;height:220px;max-width:300px;border-radius:10px;background:#111}
-.anx-pdf{display:flex;align-items:center;gap:8px;height:56px;padding:0 40px 0 14px;border:1px solid var(--line);border-radius:10px;color:var(--ink);font-weight:700;font-size:13px;text-decoration:none;max-width:280px}
-.anx-pdf span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.anx-x{position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;border:0;background:rgba(20,20,20,.72);color:#fff;font:inherit;font-size:12px;cursor:pointer}
+.anx-th{display:grid;place-items:center;position:relative;width:64px;height:64px;padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#EAEAEA;cursor:pointer;font:inherit}
+.anx-th.on{outline:2px solid var(--ink);outline-offset:1px}
+.anx-th img,.anx-th video{width:100%;height:100%;object-fit:cover;display:block}
+.anx-play{position:absolute;color:#fff;font-size:16px;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+.anx-doc{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--ink-2)}
+.anx-x{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(20,20,20,.8);color:#fff;font:inherit;font-size:10px;cursor:pointer}
+.anx-i{padding:6px 6px 0 0}
+.dlg-dt{display:inline-flex;align-items:center;gap:8px}
+.dlg-meta .lapis svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pd-form{margin:4px 0 14px;padding:14px;border:1px solid var(--line);border-radius:12px}
+.pd-form[hidden]{display:none}
+.pd-form .fl{margin-bottom:10px}
+/* janela com o arquivo em destaque: mídia à esquerda, informações à direita */
+dialog.cal-dlg.pv-on{width:min(1120px,calc(100vw - 32px));overflow:hidden}
+.dlg-in.pv{display:grid;grid-template-columns:55fr 45fr;padding:0;height:min(760px,calc(100vh - 48px))}
+.pv-m{position:relative;background:#EAEAEA;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden}
+.pv-c{position:absolute;inset:44px 56px 48px;display:flex;align-items:center;justify-content:center}
+.pv-c img,.pv-c video{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.pv-c video{width:100%;background:#111;border-radius:6px}
+.pv-c object{width:100%;height:100%;border:0;background:#fff}
+.pv-doc{display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--ink);font-weight:700;text-decoration:none;text-align:center}
+.pv-doc span{display:grid;place-items:center;width:84px;height:104px;border-radius:8px;background:#fff;border:1px solid var(--line);letter-spacing:.08em;color:var(--ink-2)}
+.pv-n{position:absolute;top:14px;left:14px;padding:4px 10px;border-radius:999px;background:rgba(20,20,20,.55);color:#fff;font-size:12px;font-weight:700}
+.pv-seta{position:absolute;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;border:0;background:#fff;color:var(--ink);font:inherit;font-size:22px;line-height:1;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.pv-ant{left:12px}.pv-prox{right:12px}
+.pv-dots{position:absolute;bottom:16px;left:0;right:0;display:flex;justify-content:center;gap:4px}
+.pv-dots button{width:22px;height:22px;padding:0;border:0;background:none;cursor:pointer;display:grid;place-items:center}
+.pv-dots button::before{content:"";width:8px;height:8px;border-radius:50%;background:rgba(20,20,20,.25)}
+.pv-dots button[aria-current]::before{background:var(--ink)}
+.pv-abrir{position:absolute;top:14px;right:14px;padding:5px 12px;border-radius:999px;background:#fff;color:var(--ink);font-size:12px;font-weight:700;text-decoration:none}
+.pv-i{overflow:auto;padding:22px 24px 24px;min-width:0}
 .anx-add{display:inline-flex;align-items:center;position:relative;margin-top:10px;cursor:pointer}
 .anx-add input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
 .anx-add:focus-within{outline:2px solid var(--ink);outline-offset:2px}
@@ -325,6 +351,12 @@ select.ed:focus-visible,input.ed:focus-visible,.dem-b:focus-visible,.chk-b:focus
   .mn-sel{flex:1;min-width:0}
   .tb-c .btn-pri{width:100%}
   .dlg-in{padding:18px}
+  dialog.cal-dlg.pv-on{overflow:auto}
+  .dlg-in.pv{display:block;height:auto;padding:0}
+  .pv-m{height:min(62vh,520px)}
+  .pv-c{inset:44px 12px 44px}
+  .pv-seta{width:34px;height:34px}
+  .pv-i{padding:18px;overflow:visible}
   dialog.cal-dlg{width:calc(100vw - 16px);max-height:calc(100vh - 16px);border-radius:16px}
   .row2{grid-template-columns:1fr}
 }
@@ -398,7 +430,7 @@ function demandasTodas(){const eds=Calendario.edicoes();
   const provisorias=Calendario.solicitacoes().filter(s=>s.situacao==="aceita"&&!s.na_planilha&&!D.demandas.some(r=>r[1]===s.titulo&&r[5]===s.criado_por))
     .map(s=>{const r=[false,s.titulo,s.urgencia||"Média",String(s.prazo).slice(0,10),"A fazer",s.criado_por||"",obsSol(s)];r.sol=s;r.linha=0;r.orig="sol:"+s.id;return r});
   return daPlanilha.concat(provisorias).map(r=>{
-    for(const e of eds)if((e.linha===r.linha&&e.demanda===r.orig)||(r.solKey&&e.demanda===r.solKey&&e.campo==="excluir")){if(e.campo==="excluir")r.excluida=true;else r[EDCOL[e.campo]]=e.campo==="feito"?e.valor==="true":e.valor}
+    for(const e of eds)if((e.linha===r.linha&&e.demanda===r.orig)||(r.solKey&&e.demanda===r.solKey)){if(e.campo==="excluir")r.excluida=true;else r[EDCOL[e.campo]]=e.campo==="feito"?e.valor==="true":e.valor}
     return r}).filter(r=>!r.excluida)}
 let LINHAS=[];   // linhas desenhadas na tabela (os botões apontam pelo índice)
 const EDITANDO=new Set();   // linhas com o lápis ligado (chave: linha|nome original)
