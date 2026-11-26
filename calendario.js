@@ -362,7 +362,7 @@
   }
   // prévia quadrada da 1ª imagem do post no card do calendário (link assinado guardado até perto de vencer)
   async function preencheMinis() {
-    const imgs = [...(Cal.root ? Cal.root.querySelectorAll("img[data-mini]") : [])];
+    const imgs = [...(Cal.root ? Cal.root.querySelectorAll("[data-mini]") : [])];
     if (!imgs.length) return;
     Cal.minis = Cal.minis || {};
     const agora = Date.now(), falta = [...new Set(imgs.map(i => i.dataset.mini))].filter(c => !(Cal.minis[c] && Cal.minis[c].ate > agora));
@@ -372,11 +372,15 @@
         falta.forEach(c => { if (urls[c]) Cal.minis[c] = { url: urls[c], ate: agora + 50 * 60 * 1000 }; });
       } catch (e) { return; }                       // sem prévia: o card continua com o 📎
     }
-    imgs.forEach(i => { const m = Cal.minis[i.dataset.mini]; if (m && i.src !== m.url) i.src = m.url; });
+    imgs.forEach(i => { const m = Cal.minis[i.dataset.mini], u = m && (i.tagName === "VIDEO" ? m.url + "#t=0.1" : m.url); if (u && i.src !== u) i.src = u; });
   }
   function cardPost(p) {
-    const img = anexosDe("post", (p.base || p).id).find(a => String(a.mime).startsWith("image/"));
-    return `<button type="button" class="pcard c-${p.conta}" data-cal-post="${esc(p.id)}">${img ? `<span class="pc-mini"><img data-mini="${esc(img.caminho)}" alt="" loading="lazy"></span>` : ""}
+    // prévia: a 1ª imagem ou vídeo do post (vídeo mostra o primeiro quadro com um play no meio)
+    const m = anexosDe("post", (p.base || p).id).find(a => /^(image|video)\//.test(String(a.mime)));
+    const mini = !m ? "" : String(m.mime).startsWith("video/")
+      ? `<span class="pc-mini"><video data-mini="${esc(m.caminho)}" muted playsinline preload="metadata" tabindex="-1" aria-hidden="true"></video><span class="pc-play" aria-hidden="true"></span></span>`
+      : `<span class="pc-mini"><img data-mini="${esc(m.caminho)}" alt="" loading="lazy"></span>`;
+    return `<button type="button" class="pcard c-${p.conta}" data-cal-post="${esc(p.id)}">${mini}
       <span class="pc-top"><span class="pc-conta c-${esc(p.conta)}">${esc(p.conta)}</span>${p.formato ? ` · ${esc(p.formato)}` : ""}</span>
       <span class="pc-tema">${esc(p.tema)}</span>
       <span class="pc-bot">${stPill(p.status)}${p.provisorio ? `<span class="selo s-wait">Entra no cronograma</span>` : selo(Store.decisao(p.id))}${(n => n ? `<span class="selo s-anx" title="${n} ${n > 1 ? "arquivos" : "arquivo"}">📎 ${n}</span>` : "")(anexosDe("post", (p.base || p).id).length)}</span></button>`;
