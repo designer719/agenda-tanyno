@@ -269,10 +269,15 @@
   const chavePost = p => `post:${p.conta}|${p.data}|${p.id}|${p.tema}`;
   const movidoPara = p => { const k = chavePost(p), l = Store.edicoes.filter(e => e.campo === "mover_post" && e.demanda === k); return l.length ? l[l.length - 1].valor : null; };
   const excluidoPost = p => Store.edicoes.some(e => e.campo === "excluir_post" && e.demanda === chavePost(p));
+  const AJ_CAMPOS = ["formato", "tema", "ideia", "gancho", "rotulo", "cta"];
+  const ajustesPost = p => { const k = chavePost(p), o = {};
+    Store.edicoes.forEach(e => { if (e.demanda === k && e.campo.startsWith("post_")) o[e.campo.slice(5)] = e.valor; }); return o; };
   const todosPosts = () => Cal.posts.concat(provisorios()).filter(p => !excluidoPost(p)).map(p => {
     const n = movidoPara(p);
-    return Object.assign({}, p, { base: { data: p.data, id: p.id } }, n ? { data: n } : {});
+    return Object.assign({}, p, ajustesPost(p), { base: { data: p.data, id: p.id, tema: p.tema } }, n ? { data: n } : {});
   });
+  // vínculo guarda o tema de quando foi ligado; o post pode ter o tema ajustado e ainda não escrito no cronograma
+  const casaVinc = (v, p) => v.tipo === "post" && v.conta === p.conta && String(v.data).slice(0, 10) === p.data && (v.tema === p.tema || v.tema === (p.base || p).tema);
   const postsMes = () => todosPosts().filter(p => p.data.slice(0, 7) === Cal.mes && filtraConta(p.conta))
     .sort((a, b) => a.data < b.data ? -1 : a.data > b.data ? 1 : 0);
   const eventosMes = () => Store.eventos.filter(e => String(e.data).slice(0, 7) === Cal.mes &&
@@ -454,12 +459,11 @@
   /* ---------- janelas ---------- */
   const campo = (rot, v) => v ? `<div class="dl-i"><dt>${esc(rot)}</dt><dd>${esc(v)}</dd></div>` : "";
   const fechar = `<button type="button" class="dlg-x" data-dlg-close aria-label="Fechar">✕</button>`;
-  const LAPIS = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg>';
 
   function htmlPost(p) {
-    const lista = postsMes(), i = lista.findIndex(x => x.id === p.id);
     const dec = Store.decisao(p.id), hist = Store.historico(p.id), pode = Store.pode();
-    const ant = i > 0 ? lista[i - 1].id : "", prox = i >= 0 && i < lista.length - 1 ? lista[i + 1].id : "";
+    const ajustando = pode && !p.provisorio && Cal.ajustando === p.id;
+    const rotRotulo = p.conta === "Glass" ? "Vinho que aparece" : "Rótulo ou vinho";
     let apr;
     if (p.provisorio) {
       apr = `<p class="muted">Aceita pelo site. Entra no cronograma na próxima atualização automática, e a aprovação fica liberada depois disso.</p>
@@ -467,34 +471,35 @@
     } else if (Store.mode === "off") {
       apr = `<p class="muted">Aprovações indisponíveis no momento.</p>`;
     } else {
-      apr = `<div class="apr-btns">
+      apr = `${ajustando ? "" : `<div class="apr-btns">
           <button type="button" class="btn-ok" data-apr="aprovado" ${pode ? "" : "disabled"}>✅ Aprovado</button>
           <button type="button" class="btn-aj" data-apr="ajustar" ${pode ? "" : "disabled"}>✏️ Ajustar</button>
-        </div>
+        </div>`}
         ${pode ? "" : Store.user ? `<p class="muted">Este e-mail não tem permissão para aprovar.</p>` : `<p class="apr-login"><button type="button" class="link" data-cal-login>Entre para aprovar</button></p>`}
-        <form class="apr-form" data-apr-form hidden>
-          <label for="apr-txt">O que precisa ajustar?</label>
-          <textarea id="apr-txt" name="comentario" rows="3" required></textarea>
-          <div class="row"><button type="submit" class="btn-aj">Enviar ajuste</button><button type="button" class="btn-sec" data-apr-cancel>Cancelar</button></div>
-        </form>
         <div class="hist"><h4>Histórico</h4>${hist.length ? `<ol>${hist.map(h => `<li>${selo(h.decisao)} <b>${esc(h.autor || "")}</b> <span class="muted">· ${quando(h.criado_em)}</span>${h.comentario ? `<p>${esc(h.comentario)}</p>` : ""}</li>`).join("")}</ol>` : `<p class="muted">Nenhuma decisão ainda.</p>`}</div>`;
     }
-    const g = !!(Store.user && Store.user.gestor) && Store.mode !== "off";
-    return `<div class="dlg-h"><div class="dlg-meta">${ctag(p.conta, CONTA_NOME[p.conta])}<span class="dlg-dt"><span class="dlg-data">${cap(extenso(p.data))}</span>${g ? `<button type="button" class="lapis" data-post-data aria-label="Mudar a data do post" title="Mudar a data">${LAPIS}</button>` : ""}</span></div>${fechar}</div>
-      ${g ? `<form class="pd-form" data-post-data-form hidden><label class="fl">Nova data<input type="date" name="data" value="${esc(p.data)}" required></label>
-        <div class="row"><button type="submit" class="btn-pri">Mudar</button><button type="button" class="btn-sec" data-pd-cancel>Cancelar</button></div>
-        <p class="muted small">A demanda ligada a este post fica com o prazo no mesmo dia.</p><p class="form-msg" role="status"></p></form>` : ""}
-      <h3 class="dlg-t" id="dlg-titulo">${esc(p.tema)}</h3>
+    const formatos = [...new Set(Object.values(FORMATO).concat(p.formato ? [p.formato] : []))];
+    const corpo = ajustando
+      ? `<form class="aj-form" data-ajuste-form>
+          <label class="fl">Tema *<input name="tema" value="${esc(p.tema)}" required maxlength="300"></label>
+          <div class="row2"><label class="fl">Data<input type="date" name="data" value="${esc(p.data)}" required></label>
+            <label class="fl">Formato<select name="formato">${formatos.map(f => `<option${f === p.formato ? " selected" : ""}>${esc(f)}</option>`).join("")}</select></label></div>
+          <label class="fl">Ideia do post<textarea name="ideia" rows="4" maxlength="3000">${esc(p.ideia || "")}</textarea></label>
+          <label class="fl">Gancho (1ª frase)<textarea name="gancho" rows="2" maxlength="3000">${esc(p.gancho || "")}</textarea></label>
+          <label class="fl">${rotRotulo}<input name="rotulo" value="${esc(p.rotulo || "")}" maxlength="3000"></label>
+          <label class="fl">CTA<input name="cta" value="${esc(p.cta || "")}" maxlength="3000"></label>
+          <label class="fl">O que precisa ajustar? <small>Opcional. Vai para o histórico.</small><textarea name="comentario" rows="2"></textarea></label>
+          <div class="row"><button type="submit" class="btn-aj">Salvar ajuste</button><button type="button" class="btn-sec" data-aj-cancel>Cancelar</button></div>
+          <p class="form-msg" role="status"></p>
+        </form>`
+      : `<h3 class="dlg-t" id="dlg-titulo">${esc(p.tema)}</h3>
       <div class="dlg-tags"><span class="pc-fmt">${esc(p.formato)}</span>${stPill(p.status)}</div>
-      <dl class="dlg-dl">${campo("Ideia do post", p.ideia)}${campo("Gancho (1ª frase)", p.gancho)}${campo(p.conta === "Glass" ? "Vinho que aparece" : "Rótulo ou vinho", p.rotulo)}${campo("CTA", p.cta)}</dl>
+      <dl class="dlg-dl">${campo("Ideia do post", p.ideia)}${campo("Gancho (1ª frase)", p.gancho)}${campo(rotRotulo, p.rotulo)}${campo("CTA", p.cta)}</dl>`;
+    return `<div class="dlg-h"><div class="dlg-meta">${ctag(p.conta, CONTA_NOME[p.conta])}<span class="dlg-data">${cap(extenso(p.data))}</span></div>${fechar}</div>
+      ${corpo}
       ${htmlAnexos("post", (p.base || p).id)}
       <section class="apr" aria-label="Aprovação"><h4>Aprovação ${p.provisorio ? "" : selo(dec)}</h4>${apr}</section>
-      ${Store.user && Store.user.gestor ? `<div class="row post-del"><button type="button" class="btn-del" data-post-excluir>Excluir post</button></div>` : ""}
-      <div class="dlg-nav">
-        <button type="button" class="btn-sec" data-nav="${ant}" ${ant ? "" : "disabled"}>‹ Anterior</button>
-        <span class="muted">${i + 1} de ${lista.length}</span>
-        <button type="button" class="btn-sec" data-nav="${prox}" ${prox ? "" : "disabled"}>Próximo ›</button>
-      </div>`;
+      ${Store.user && Store.user.gestor ? `<div class="row post-del"><button type="button" class="btn-del" data-post-excluir>Excluir post</button></div>` : ""}`;
   }
 
   function htmlEvento(e) {
@@ -653,7 +658,7 @@
   // demanda do site fica ligada pela solicitação; as da planilha pela linha e nome
   const chaveVinc = r => r.sol ? { linha: 0, demanda: "sol:" + r.sol.id } : { linha: r.linha, demanda: r.orig };
   const vinculoDe = r => r && Store.vinculos.find(v => (r.sol && v.demanda === "sol:" + r.sol.id) || (v.linha === r.linha && v.demanda === r.orig));
-  const postDoVinculo = v => todosPosts().find(x => x.conta === v.conta && x.data === String(v.data).slice(0, 10) && x.tema === v.tema);
+  const postDoVinculo = v => todosPosts().find(x => casaVinc(v, x));
   // prazo mudou: o post ou evento ligado vai para o mesmo dia
   async function moveVinculado(r, nova) {
     const v = vinculoDe(r);
@@ -716,7 +721,7 @@
       Cal.dlg.addEventListener("close", () => { Cal.aberto = null; if (Cal.ultimoFoco && document.contains(Cal.ultimoFoco)) Cal.ultimoFoco.focus(); });
     }
     if (!Cal.dlg.open) Cal.ultimoFoco = document.activeElement;
-    if (!Cal.aberto || Cal.aberto.id !== id) Cal.pvI = 0;
+    if (!Cal.aberto || Cal.aberto.id !== id) { Cal.pvI = 0; Cal.ajustando = null; }
     Cal.aberto = { tipo, id, extra };
     desenhaDlg();
     if (!Cal.dlg.open) Cal.dlg.showModal();
@@ -763,8 +768,7 @@
     if (b.dataset.nav) { abre("post", b.dataset.nav); return; }
     if (b.dataset.verSol) { abre("sol", b.dataset.verSol); return; }
     if (b.dataset.pvIr !== undefined) { Cal.pvI = +b.dataset.pvIr; desenhaMidia(); return; }
-    if (b.hasAttribute("data-post-data")) { const f = Cal.dlg.querySelector("[data-post-data-form]"); f.hidden = !f.hidden; if (!f.hidden) f.elements.data.focus(); return; }
-    if (b.hasAttribute("data-pd-cancel")) { const f = Cal.dlg.querySelector("[data-post-data-form]"); f.hidden = true; f.reset(); return; }
+    if (b.hasAttribute("data-aj-cancel")) { Cal.ajustando = null; desenhaDlg(); return; }
     if (b.dataset.anxDel) {
       const a = Store.anexos.find(x => String(x.id) === b.dataset.anxDel);
       if (a && confirm(`Apagar o arquivo "${a.nome}"?`)) { try { await Store.apagarAnexo(a); notify(); } catch (e) { alert(erroMsg(e)); } }
@@ -773,7 +777,7 @@
     if (b.hasAttribute("data-post-excluir")) {
       const p = todosPosts().find(x => x.id === Cal.aberto.id);
       if (!p) return;
-      const ligados = p.provisorio ? [] : Store.vinculos.filter(v => v.tipo === "post" && v.conta === p.conta && String(v.data).slice(0, 10) === p.data && v.tema === p.tema);
+      const ligados = p.provisorio ? [] : Store.vinculos.filter(v => casaVinc(v, p));
       const n = p.provisorio ? 1 : ligados.length;
       if (!confirm(`Excluir o post "${p.tema}" de ${dm(p.data)}?${n ? ` A demanda ligada a ele também é excluída.` : ""} Some agora e sai do cronograma na próxima atualização.`)) return;
       try {
@@ -805,9 +809,10 @@
       return;
     }
     if (b.dataset.apr === "ajustar") {
-      const f = Cal.dlg.querySelector("[data-apr-form]"); f.hidden = false; f.querySelector("textarea").focus(); return;
+      Cal.ajustando = Cal.aberto.id; desenhaDlg();
+      const t = Cal.dlg.querySelector("[data-ajuste-form] [name=tema]"); if (t) { t.focus(); t.scrollIntoView({ block: "nearest" }); }
+      return;
     }
-    if (b.hasAttribute("data-apr-cancel")) { const f = Cal.dlg.querySelector("[data-apr-form]"); f.hidden = true; f.reset(); return; }
     if (b.dataset.evEdit) { const e = Store.eventos.find(x => String(x.id) === b.dataset.evEdit); abre("form", null, Object.assign({}, e)); return; }
     if (b.dataset.evDel) {
       const e = Store.eventos.find(x => String(x.id) === b.dataset.evDel);
@@ -825,26 +830,34 @@
     ev.preventDefault();
     const f = ev.target, msg = f.querySelector(".form-msg");
     const btn = f.querySelector("button[type=submit]");
-    if (f.hasAttribute("data-post-data-form")) {
-      const p = todosPosts().find(x => x.id === Cal.aberto.id), nova = f.elements.data.value;
-      if (!p || !nova || nova === p.data) { f.hidden = true; return; }
+    if (f.hasAttribute("data-ajuste-form")) {
+      const p = todosPosts().find(x => x.id === Cal.aberto.id);
+      if (!p) return;
+      const el = f.elements, novo = {}, mud = [];
+      const ROT = { formato: "formato", tema: "tema", ideia: "ideia", gancho: "gancho", rotulo: "rótulo", cta: "CTA" };
+      for (const c of AJ_CAMPOS) { const v = el[c].value.trim(); if (v !== (p[c] || "").trim()) { novo[c] = v; mud.push(ROT[c]); } }
+      if (!el.tema.value.trim()) { msg.textContent = "O tema não pode ficar vazio."; el.tema.focus(); return; }
+      const nova = el.data.value, mudouData = !!nova && nova !== p.data;
+      if (mudouData) mud.push("data");
+      const txt = el.comentario.value.trim();
+      if (!mud.length && !txt) { msg.textContent = "Mude algum campo ou escreva o que precisa ajustar."; return; }
       btn.disabled = true; msg.textContent = "Salvando…";
       try {
-        const ligados = Store.vinculos.filter(v => v.tipo === "post" && v.conta === p.conta && String(v.data).slice(0, 10) === p.data && v.tema === p.tema);
-        for (const v of ligados) await Store.updVinculo(v.id, { data: nova });
-        const eds = [{ linha: 0, demanda: chavePost(Object.assign({}, p, p.base)), campo: "mover_post", valor: nova }]
-          .concat(ligados.map(v => ({ linha: v.linha || 0, demanda: v.demanda, campo: "prazo", valor: nova })));
-        if (p.provisorio && !ligados.some(v => v.demanda === "sol:" + p.sol)) eds.push({ linha: 0, demanda: "sol:" + p.sol, campo: "prazo", valor: nova });
-        await Store.addEdicoes(eds); notify();
+        const chave = chavePost(Object.assign({}, p, p.base)), ligados = Store.vinculos.filter(v => casaVinc(v, p));
+        const eds = Object.keys(novo).map(c => ({ linha: 0, demanda: chave, campo: "post_" + c, valor: novo[c] }));
+        if (mudouData) {
+          eds.push({ linha: 0, demanda: chave, campo: "mover_post", valor: nova });
+          ligados.forEach(v => eds.push({ linha: v.linha || 0, demanda: v.demanda, campo: "prazo", valor: nova }));
+        }
+        for (const v of ligados) {
+          const up = Object.assign({}, mudouData ? { data: nova } : {}, novo.tema ? { tema: novo.tema } : {});
+          if (Object.keys(up).length) await Store.updVinculo(v.id, up);
+        }
+        await Store.addEdicoes(eds);
+        const cap1 = t => t.charAt(0).toUpperCase() + t.slice(1);
+        await Store.addAprov(p.id, "ajustar", txt || (mud.length ? `${cap1(mud.join(", "))} ajustado${mud.length > 1 ? "s" : ""} no site.` : ""));
+        Cal.ajustando = null; notify();
       } catch (e) { msg.textContent = erroMsg(e); btn.disabled = false; }
-      return;
-    }
-    if (f.hasAttribute("data-apr-form")) {
-      const txt = f.comentario.value.trim();
-      if (!txt) { f.comentario.focus(); return; }
-      btn.disabled = true;
-      try { await Store.addAprov(Cal.aberto.id, "ajustar", txt); notify(); }
-      catch (e) { alert(erroMsg(e)); btn.disabled = false; }
       return;
     }
     if (f.hasAttribute("data-ev-form")) {

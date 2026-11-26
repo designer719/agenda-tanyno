@@ -221,7 +221,7 @@ dialog.cal-dlg::backdrop{background:rgba(20,20,20,.45)}
 .dlg-dl{margin:0 0 18px;display:grid;gap:12px}
 .dl-i dt{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
 .dl-i dd{margin:0;font-size:14.5px}
-.apr{border-top:1px solid var(--line);padding-top:16px}
+.apr{margin-top:22px}
 .apr h4,.hist h4{margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);display:flex;align-items:center;gap:8px}
 .apr h4 .selo{font-size:12px;letter-spacing:0;text-transform:none}
 .apr-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -288,6 +288,10 @@ select.ed:focus-visible,input.ed:focus-visible,.dem-b:focus-visible,.chk-b:focus
 .form-msg:empty{display:none}
 .ev-ic{font-size:22px}
 .anx{border-top:1px solid var(--line);padding-top:16px;margin-top:16px}
+.anx-l>p{margin:0}
+.aj-form{margin:4px 0 6px}
+.aj-form .fl{margin-bottom:12px}
+.aj-form textarea{resize:vertical}
 .anx h4{margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);display:flex;gap:8px}
 .anx-l{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory}
 .anx-i{position:relative;margin:0;flex:none;scroll-snap-align:start}
@@ -298,11 +302,6 @@ select.ed:focus-visible,input.ed:focus-visible,.dem-b:focus-visible,.chk-b:focus
 .anx-doc{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--ink-2)}
 .anx-x{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(20,20,20,.8);color:#fff;font:inherit;font-size:10px;cursor:pointer}
 .anx-i{padding:6px 6px 0 0}
-.dlg-dt{display:inline-flex;align-items:center;gap:8px}
-.dlg-meta .lapis svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.pd-form{margin:4px 0 14px;padding:14px;border:1px solid var(--line);border-radius:12px}
-.pd-form[hidden]{display:none}
-.pd-form .fl{margin-bottom:10px}
 /* janela com o arquivo em destaque: mídia à esquerda, informações à direita */
 dialog.cal-dlg.pv-on{width:min(1120px,calc(100vw - 32px));overflow:hidden}
 .dlg-in.pv{display:grid;grid-template-columns:55fr 45fr;padding:0;height:min(760px,calc(100vh - 48px))}
@@ -322,7 +321,7 @@ dialog.cal-dlg.pv-on{width:min(1120px,calc(100vw - 32px));overflow:hidden}
 .pv-dots button[aria-current]::before{background:var(--ink)}
 .pv-abrir{position:absolute;top:14px;right:14px;padding:5px 12px;border-radius:999px;background:#fff;color:var(--ink);font-size:12px;font-weight:700;text-decoration:none}
 .pv-i{overflow:auto;padding:22px 24px 24px;min-width:0}
-.anx-add{display:inline-flex;align-items:center;position:relative;margin-top:10px;cursor:pointer}
+.anx-add{display:inline-flex;align-items:center;position:relative;margin-top:8px;cursor:pointer}
 .anx-add input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
 .anx-add:focus-within{outline:2px solid var(--ink);outline-offset:2px}
 .s-anx{background:#EEF1F5;color:#3A4A5E}
