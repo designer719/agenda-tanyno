@@ -280,12 +280,12 @@
   const chavePost = p => `post:${p.conta}|${p.data}|${p.id}|${p.tema}`;
   const movidoPara = p => { const k = chavePost(p), l = Store.edicoes.filter(e => e.campo === "mover_post" && e.demanda === k); return l.length ? l[l.length - 1].valor : null; };
   const excluidoPost = p => Store.edicoes.some(e => e.campo === "excluir_post" && e.demanda === chavePost(p));
-  const AJ_CAMPOS = ["formato", "tema", "ideia", "gancho", "rotulo", "cta"];
+  const AJ_CAMPOS = ["formato", "tema", "ideia", "gancho", "rotulo", "cta"];   // o status (Publicado) também vem de post_status
   const ajustesPost = p => { const k = chavePost(p), o = {};
     Store.edicoes.forEach(e => { if (e.demanda === k && e.campo.startsWith("post_")) o[e.campo.slice(5)] = e.valor; }); return o; };
   const todosPosts = () => Cal.posts.concat(provisorios()).filter(p => !excluidoPost(p)).map(p => {
     const n = movidoPara(p);
-    return Object.assign({}, p, ajustesPost(p), { base: { data: p.data, id: p.id, tema: p.tema } }, n ? { data: n } : {});
+    return Object.assign({}, p, ajustesPost(p), { base: { data: p.data, id: p.id, tema: p.tema, status: p.status } }, n ? { data: n } : {});
   });
   // vínculo guarda o tema de quando foi ligado; o post pode ter o tema ajustado e ainda não escrito no cronograma
   const casaVinc = (v, p) => v.tipo === "post" && v.conta === p.conta && String(v.data).slice(0, 10) === p.data && (v.tema === p.tema || v.tema === (p.base || p).tema);
@@ -391,10 +391,11 @@
     const mini = !m ? "" : String(m.mime).startsWith("video/")
       ? `<span class="pc-mini"><video data-mini="${esc(m.caminho)}" muted playsinline preload="metadata" tabindex="-1" aria-hidden="true"></video><span class="pc-play" aria-hidden="true"></span></span>`
       : `<span class="pc-mini"><img data-mini="${esc(m.caminho)}" alt="" loading="lazy"></span>`;
-    return `<button type="button" class="pcard c-${p.conta}" data-cal-post="${esc(p.id)}">${mini}
+    const pub = p.status === "Publicado";
+    return `<button type="button" class="pcard c-${p.conta}${pub ? " pc-pub" : ""}" data-cal-post="${esc(p.id)}">${pub ? `<span class="pc-pubtag">✓ Publicado</span>` : ""}${mini}
       <span class="pc-top"><span class="pc-conta c-${esc(p.conta)}">${esc(p.conta)}</span>${p.formato ? ` · ${esc(p.formato)}` : ""}</span>
       <span class="pc-tema">${esc(p.tema)}</span>
-      <span class="pc-bot">${stPill(p.status)}${p.provisorio ? `<span class="selo s-wait">Entra no cronograma</span>` : selo(Store.decisao(p.id))}${(n => n ? `<span class="selo s-anx" title="${n} ${n > 1 ? "arquivos" : "arquivo"}">📎 ${n}</span>` : "")(anexosDe("post", (p.base || p).id).length)}</span></button>`;
+      <span class="pc-bot">${pub ? "" : stPill(p.status)}${pub ? "" : p.provisorio ? `<span class="selo s-wait">Entra no cronograma</span>` : selo(Store.decisao(p.id))}${(n => n ? `<span class="selo s-anx" title="${n} ${n > 1 ? "arquivos" : "arquivo"}">📎 ${n}</span>` : "")(anexosDe("post", (p.base || p).id).length)}</span></button>`;
   }
   // aniversários (planilha do Drive): "MM-DD" vira a data deste mês; 29/02 cai em 28/02 fora do ano bissexto
   const bissexto = y => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -505,6 +506,9 @@
           <button type="button" class="btn-ok" data-apr="aprovado" ${pode ? "" : "disabled"}>✅ Aprovado</button>
           <button type="button" class="btn-aj" data-apr="ajustar" ${pode ? "" : "disabled"}>✏️ Ajustar</button>
         </div>`}
+        ${pode && !ajustando ? (p.status === "Publicado"
+          ? `<p class="pub-ok"><span class="stp st-Publicado">✓ Publicado</span><button type="button" class="link" data-post-pub="0">Desfazer</button></p>`
+          : `<button type="button" class="btn-pub" data-post-pub="1">✓ Marcar como publicado</button>`) : ""}
         ${pode ? "" : Store.user ? `<p class="muted">Este e-mail não tem permissão para aprovar.</p>` : `<p class="apr-login"><button type="button" class="link" data-cal-login>Entre para aprovar</button></p>`}
         <div class="hist"><h4>Histórico</h4>${hist.length ? `<ol>${hist.map(h => `<li>${selo(h.decisao)} <b>${esc(h.autor || "")}</b> <span class="muted">· ${quando(h.criado_em)}</span>${h.comentario ? `<p>${esc(h.comentario)}</p>` : ""}</li>`).join("")}</ol>` : `<p class="muted">Nenhuma decisão ainda.</p>`}</div>`;
     }
@@ -823,6 +827,17 @@
     if (b.dataset.verSol) { abre("sol", b.dataset.verSol); return; }
     if (b.dataset.pvIr !== undefined) { Cal.pvI = +b.dataset.pvIr; desenhaMidia(); return; }
     if (b.hasAttribute("data-aj-cancel")) { Cal.ajustando = null; desenhaDlg(); return; }
+    if (b.dataset.postPub) {             // publicado: status do post + demandas ligadas concluídas (desfazer volta os dois)
+      const p = todosPosts().find(x => x.id === Cal.aberto.id); if (!p || p.provisorio) return;
+      const sim = b.dataset.postPub === "1", volta = p.base.status && p.base.status !== "Publicado" ? p.base.status : "Aprovado";
+      b.disabled = true;
+      try {
+        await Store.addEdicoes([{ linha: 0, demanda: chavePost(Object.assign({}, p, p.base)), campo: "post_status", valor: sim ? "Publicado" : volta }]
+          .concat(Store.vinculos.filter(v => casaVinc(v, p)).map(v => ({ linha: v.linha || 0, demanda: v.demanda, campo: "feito", valor: String(sim) }))));
+        notify();
+      } catch (e) { alert(erroMsg(e)); b.disabled = false; }
+      return;
+    }
     if (b.dataset.anxDel) {
       const a = Store.anexos.find(x => String(x.id) === b.dataset.anxDel);
       if (a && confirm(`Apagar o arquivo "${a.nome}"?`)) { try { await Store.apagarAnexo(a); notify(); } catch (e) { alert(erroMsg(e)); } }
